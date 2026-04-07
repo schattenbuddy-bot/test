@@ -2174,8 +2174,15 @@ function renderSanktionen(filtered=null){
 window.addSanktion=async function(){
   const nr=document.getElementById('sank-nr').value.trim();
   if (!nr) return showNotif('SK NR erforderlich','error');
+  const eingabeId=document.getElementById('sank-id').value.trim();
+  if (!eingabeId) return showNotif('ID erforderlich','error');
+
+  // Prüfen ob ID im Mitarbeiterregister existiert
+  const maExists=mitarbeiterData.find(m=>m.id===eingabeId);
+  if (!maExists) return showNotif(`ID "${eingabeId}" existiert nicht im Mitarbeiterregister!`,'error');
+
   const data={
-    nr, id:document.getElementById('sank-id').value.trim(),
+    nr, id:eingabeId,
     name:document.getElementById('sank-name').value.trim(),
     grund:document.getElementById('sank-grund').value.trim(),
     strafe:document.getElementById('sank-strafe').value.trim(),
