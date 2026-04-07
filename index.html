@@ -1005,7 +1005,7 @@
     <div style="flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text-dim);">Sanktions Archiv</div>
     <button class="tool-btn red" onclick="deleteSanktionArchiv()">✕</button>
     <button class="tool-btn" onclick="searchSanktionArchiv()">🔍</button>
-    <input class="search-input" autocomplete="off" id="sank-archiv-search" placeholder="ID Suchen">
+    <input class="search-input" autocomplete="off" id="sank-archiv-search" placeholder="SK Suchen">
   </div>
   <div id="sank-archiv-container" style="padding:12px;"></div>
 </div>
@@ -2138,19 +2138,20 @@ window.toggleArchivGroup = function(gi) {
 window.searchSanktionArchiv=function(){
   const q=document.getElementById('sank-archiv-search').value.trim().toLowerCase();
   if (!q){renderSanktionArchiv();return;}
-  renderSanktionArchiv(sanktionArchivData.filter(s=>(s.id||'').toLowerCase().includes(q)||(s.name||'').toLowerCase().includes(q)));
+  renderSanktionArchiv(sanktionArchivData.filter(s=>(s.nr||'').toLowerCase().includes(q)));
 }
 
 window.deleteSanktionArchiv=function(){
-  const id=document.getElementById('sank-archiv-search').value.trim();
-  if (!id) return showNotif('Bitte ID eingeben','error');
-  const found=sanktionArchivData.filter(s=>s.id===id);
-  if (found.length===0) return showNotif('Keine Sanktion gefunden','error');
+  const nr=document.getElementById('sank-archiv-search').value.trim();
+  if (!nr) return showNotif('Bitte SK Nummer eingeben','error');
+  const found=sanktionArchivData.filter(s=>s.nr===nr);
+  if (found.length===0) return showNotif('Keine Sanktion mit dieser SK Nummer gefunden','error');
+  const s=found[0];
   document.getElementById('del-title').textContent='Archiv-Sanktion löschen?';
-  document.getElementById('del-msg').textContent=`Alle Sanktionen der ID "${id}" aus dem Archiv löschen?`;
+  document.getElementById('del-msg').textContent=`Sanktion "${nr}" (ID: ${s.id||'?'}) wirklich aus dem Archiv löschen?`;
   deleteCallback=async()=>{
     for (const s of found) await deleteDoc(doc(db,'sanktionenArchiv',s._id));
-    await writeLog('sanktion','delete',`Sanktions-Archiv gelöscht für ID: ${id}`,id);
+    await writeLog('sanktion','delete',`Sanktions-Archiv gelöscht: SK-${nr}`,nr);
     showNotif('Gelöscht','success');
     await loadSanktionArchiv();
   };
