@@ -1762,9 +1762,25 @@ window.addMitarbeiter = async function() {
           geaendertVon: currentUser?.email||'',
           geaendertVonUID: currentUser?.uid||''
         });
-        await writeLog('mitarbeiter','update',`Rang geändert: ${rankName(existing.rank)} → ${rankName(newRank)} für ID ${id}`,id);
+        await writeLog('mitarbeiter','update',`Rang geändert: ${rankName(existing.rank)} → ${rankName(newRank)} für ${data.name||id} (ID: ${id})`,id);
       } else {
-        await writeLog('mitarbeiter','update',`Mitarbeiter bearbeitet: ${data.name||id} (ID: ${id})`,id);
+        // Genau geänderte Felder ermitteln
+        const changes = [];
+        if (existing) {
+          if (existing.name !== data.name) changes.push(`Name: "${existing.name||'–'}" → "${data.name||'–'}"`);
+          if (existing.dn !== data.dn) changes.push(`DN: "${existing.dn||'–'}" → "${data.dn||'–'}"`);
+          if (existing.tel !== data.tel) changes.push(`Tel: "${existing.tel||'–'}" → "${data.tel||'–'}"`);
+          if (existing.abteilung !== data.abteilung) changes.push(`Abteilung: "${existing.abteilung||'–'}" → "${data.abteilung||'–'}"`);
+          if (existing.zabt !== data.zabt) changes.push(`ZweitAbt: "${existing.zabt||'–'}" → "${data.zabt||'–'}"`);
+          if (String(existing.urlaub) !== String(data.urlaub)) changes.push(`Urlaub: ${existing.urlaub||0} → ${data.urlaub}`);
+          if (String(existing.strike) !== String(data.strike)) changes.push(`Strike: ${existing.strike||0} → ${data.strike}`);
+          if (existing.invite !== data.invite) changes.push(`Invite: "${existing.invite||'–'}" → "${data.invite||'–'}"`);
+          if (existing.rankup !== data.rankup) changes.push(`RankUp-Datum: "${existing.rankup||'–'}" → "${data.rankup||'–'}"`);
+        }
+        const detailText = changes.length > 0
+          ? `Mitarbeiter bearbeitet: ${data.name||id} (ID: ${id}) — ${changes.join(' | ')}`
+          : `Mitarbeiter bearbeitet: ${data.name||id} (ID: ${id}) — keine Änderungen`;
+        await writeLog('mitarbeiter','update', detailText, id);
       }
       await updateDoc(doc(db,'mitarbeiter',editingMaId), data);
       showNotif('Mitarbeiter aktualisiert','success');
@@ -1824,9 +1840,21 @@ window.saveAusbildung = async function() {
     ausb[k]=document.getElementById('ausb-'+k).checked;
   });
   const ma = mitarbeiterData.find(m=>m._id===ausbildungTargetId);
+  const altAusb = ma?.ausbildungen || {};
+
+  // Genau welche Ausbildungen geändert wurden
+  const hinzu    = Object.keys(ausb).filter(k => ausb[k] === true  && altAusb[k] !== true);
+  const entfernt = Object.keys(ausb).filter(k => ausb[k] === false && altAusb[k] === true);
+  const changes  = [];
+  if (hinzu.length > 0)    changes.push(`Hinzugefügt: ${hinzu.join(', ')}`);
+  if (entfernt.length > 0) changes.push(`Entfernt: ${entfernt.join(', ')}`);
+  const detailText = changes.length > 0
+    ? `Ausbildungen bearbeitet für ${ma?.name||ma?.id||ausbildungTargetId} (ID: ${ma?.id||ausbildungTargetId}) — ${changes.join(' | ')}`
+    : `Ausbildungen bearbeitet für ${ma?.name||ma?.id||ausbildungTargetId} (ID: ${ma?.id||ausbildungTargetId}) — keine Änderungen`;
+
   try {
     await updateDoc(doc(db,'mitarbeiter',ausbildungTargetId), {ausbildungen:ausb});
-    await writeLog('mitarbeiter','update',`Ausbildungen bearbeitet für: ${ma?.name||ma?.id||ausbildungTargetId}`,ma?.id||ausbildungTargetId);
+    await writeLog('mitarbeiter','update', detailText, ma?.id||ausbildungTargetId);
     showNotif('Ausbildungen gespeichert','success');
     closeModal('ausbildungModal');
     await loadMitarbeiter();
@@ -2032,11 +2060,21 @@ window.saveZugriff=async function(){
     email:document.getElementById('ez-email').value.trim(),
     rang:document.getElementById('ez-rang').value
   };
+  // Genau geänderte Felder ermitteln
+  const changes = [];
+  if (z) {
+    if ((z.name||'') !== data.name) changes.push(`Name: "${z.name||'–'}" → "${data.name||'–'}"`);
+    if ((z.nachname||'') !== data.nachname) changes.push(`Nachname: "${z.nachname||'–'}" → "${data.nachname||'–'}"`);
+    if ((z.tel||'') !== data.tel) changes.push(`Tel: "${z.tel||'–'}" → "${data.tel||'–'}"`);
+    if ((z.email||'') !== data.email) changes.push(`Email: "${z.email||'–'}" → "${data.email||'–'}"`);
+    if ((z.rang||'') !== data.rang) changes.push(`Rang: "${z.rang||'–'}" → "${data.rang}"`);
+  }
+  const detailStr = changes.length > 0 ? changes.join(' | ') : 'keine Änderungen';
   try {
     const quelle=z?(z._quelle||'zugriff'):'zugriff';
     if (quelle==='anfragen') await updateDoc(doc(db,'anfragen',docId), data);
     else await updateDoc(doc(db,'zugriff',docId), data);
-    await writeLog('zugriff','update',`Zugriff bearbeitet: ${z?.name||z?.id||''} → Rang: ${data.rang}`,z?.id||docId);
+    await writeLog('zugriff','update',`Zugriff bearbeitet: ${z?.name||z?.id||''} (ID: ${z?.id||'?'}) — ${detailStr}`,z?.id||docId);
     showNotif('Gespeichert','success');
     closeModal('editZugriffModal');
     await loadZugriff();
@@ -2334,9 +2372,17 @@ window.saveSanktionEdit=async function(docId,nr){
   const detailId      = document.getElementById('se-id').value;
   const detailName    = document.getElementById('se-name').value;
   const grundbeweise  = document.getElementById('se-grundbeweise').value;
+  const s = sanktionData.find(x=>x._id===docId);
+  const changes = [];
+  if (s) {
+    if ((s.detailId||'') !== detailId) changes.push(`ID: "${s.detailId||'–'}" → "${detailId||'–'}"`);
+    if ((s.detailName||'') !== detailName) changes.push(`Name: "${s.detailName||'–'}" → "${detailName||'–'}"`);
+    if ((s.grundbeweise||'') !== grundbeweise) changes.push(`Sanktionsgrundbeweise: "${s.grundbeweise||'–'}" → "${grundbeweise||'–'}"`);
+  }
+  const detailStr = changes.length > 0 ? changes.join(' | ') : 'keine Änderungen';
   try {
     await updateDoc(doc(db,'sanktionen',docId),{detailId, detailName, grundbeweise});
-    await writeLog('sanktion','update',`Sanktion SK-${nr} Detailseite bearbeitet — ID: ${detailId}, Name: ${detailName}`,detailId||nr);
+    await writeLog('sanktion','update',`Sanktion SK-${nr} bearbeitet — ${detailStr}`,detailId||nr);
     const idEl    = document.getElementById('sd-id-'+nr);
     if (idEl) idEl.textContent = detailId;
     const nameEl  = document.getElementById('sd-name-'+nr);
@@ -2439,9 +2485,17 @@ window.saveRule=async function(){
   if (!rule) return;
   const data={para:rule.para, def:document.getElementById('er-def').value.trim()};
   for(let i=0;i<=12;i++) data['v'+i]=document.getElementById('er-'+i).value.trim();
+  // Geänderte Felder ermitteln
+  const changes=[];
+  if ((rule.def||'')!==data.def) changes.push(`Regeldefinition: "${rule.def||'–'}" → "${data.def||'–'}"`);
+  for(let i=0;i<=12;i++){
+    const alt=rule['v'+i]||''; const neu=data['v'+i]||'';
+    if (alt!==neu) changes.push(`${skHeaders[i]||i}: "${alt||'–'}" → "${neu||'–'}"`);
+  }
+  const detailStr=changes.length>0?changes.join(' | '):'keine Änderungen';
   try {
     await updateDoc(doc(db,'skRules',idx), data);
-    await writeLog('sk','update',`SK Regel ${rule.para} bearbeitet: ${data.def||''}`,rule.para);
+    await writeLog('sk','update',`SK Regel ${rule.para} bearbeitet — ${detailStr}`,rule.para);
     showNotif('Regel gespeichert','success');
     closeModal('editRuleModal');
     await loadSKRules();
