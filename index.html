@@ -400,6 +400,55 @@
 
   .log-clear-btn { padding:6px 14px; background:rgba(127,29,29,0.5); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; cursor:pointer; border-radius:3px; font-size:12px; transition:all 0.2s; margin-left:auto; }
   .log-clear-btn:hover { background:rgba(185,28,28,0.6); }
+
+  /* ===== SANKTIONS-ARCHIV GRUPPENANSICHT ===== */
+  .archiv-group {
+    margin-bottom:10px;
+    border:1px solid var(--border);
+    border-radius:4px;
+    overflow:hidden;
+  }
+  .archiv-group-header {
+    display:flex; align-items:center; gap:12px;
+    padding:10px 16px;
+    background:linear-gradient(135deg, rgba(10,20,40,0.95), rgba(15,28,55,0.9));
+    cursor:pointer; user-select:none;
+    transition:background 0.2s;
+    border-bottom:1px solid transparent;
+  }
+  .archiv-group-header:hover { background:linear-gradient(135deg, rgba(0,80,180,0.15), rgba(10,30,70,0.95)); }
+  .archiv-group-header.open { border-bottom:1px solid var(--border); }
+  .archiv-group-arrow {
+    font-size:11px; color:var(--cyan);
+    transition:transform 0.25s; flex-shrink:0;
+  }
+  .archiv-group-header.open .archiv-group-arrow { transform:rotate(90deg); }
+  .archiv-group-id {
+    font-family:'Orbitron',monospace; font-size:13px;
+    font-weight:700; color:var(--cyan); letter-spacing:1px;
+  }
+  .archiv-group-name { font-size:13px; color:var(--text); font-weight:600; }
+  .archiv-group-count {
+    margin-left:auto;
+    background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.3);
+    color:#fca5a5; font-size:11px; font-weight:700;
+    padding:2px 9px; border-radius:20px; white-space:nowrap;
+  }
+  .archiv-group-body { display:none; }
+  .archiv-group-body.open { display:block; }
+  .archiv-group-body table { width:100%; border-collapse:collapse; font-size:12px; }
+  .archiv-group-body th {
+    background:rgba(5,12,25,0.9); padding:7px 8px;
+    text-align:center; border-bottom:1px solid var(--border);
+    color:var(--text-dim); font-size:10px; letter-spacing:0.5px; text-transform:uppercase;
+  }
+  .archiv-group-body td {
+    padding:7px 8px; border-bottom:1px solid rgba(30,58,95,0.2);
+    text-align:center; color:var(--text);
+  }
+  .archiv-group-body tbody tr:last-child td { border-bottom:none; }
+  .archiv-group-body tbody tr:hover td { background:rgba(239,68,68,0.05); }
+  .archiv-empty { text-align:center; padding:40px; color:var(--text-muted); font-size:13px; letter-spacing:1px; }
 </style>
 </head>
 <body>
@@ -955,12 +1004,7 @@
     <button class="tool-btn" onclick="searchSanktionArchiv()">🔍</button>
     <input class="search-input" autocomplete="off" id="sank-archiv-search" placeholder="ID Suchen">
   </div>
-  <div class="table-wrapper">
-    <table class="data-table" style="width:100%;">
-      <thead><tr><th>SK</th><th>ID</th><th>Name</th><th>Grund der Sanktion</th><th>Strafe</th></tr></thead>
-      <tbody id="sank-archiv-tbody"></tbody>
-    </table>
-  </div>
+  <div id="sank-archiv-container" style="padding:12px;"></div>
 </div>
 
 <!-- PAGE 20 - AKTIVITÄTSLOG (Nur Ersteller) -->
@@ -2024,20 +2068,65 @@ async function loadSanktionArchiv() {
 }
 
 function renderSanktionArchiv(filtered=null){
-  const list=filtered||sanktionArchivData;
-  const tbody=document.getElementById('sank-archiv-tbody');
-  if (!tbody) return;
-  if (list.length===0){tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">Kein Archiv vorhanden.</td></tr>`;return;}
-  tbody.innerHTML=list.map(s=>`<tr>
-    <td>${s.nr||''}</td><td>${s.id||''}</td><td>${s.name||''}</td>
-    <td>${s.grund||''}</td><td>${s.strafe||''}</td>
-  </tr>`).join('');
+  const list = filtered || sanktionArchivData;
+  const container = document.getElementById('sank-archiv-container');
+  if (!container) return;
+
+  if (list.length === 0) {
+    container.innerHTML = `<div class="archiv-empty">📂 Kein Archiv vorhanden.</div>`;
+    return;
+  }
+
+  // Gruppieren nach ID
+  const groups = {};
+  list.forEach(s => {
+    const key = s.id || '—';
+    if (!groups[key]) groups[key] = { id: key, name: s.name || '—', sanktionen: [] };
+    groups[key].sanktionen.push(s);
+    // Name aktualisieren falls vorhanden
+    if (s.name && groups[key].name === '—') groups[key].name = s.name;
+  });
+
+  // Sortiert nach ID
+  const sortedGroups = Object.values(groups).sort((a,b) => a.id.localeCompare(b.id));
+
+  container.innerHTML = sortedGroups.map((g, gi) => `
+    <div class="archiv-group">
+      <div class="archiv-group-header" onclick="toggleArchivGroup(${gi})">
+        <span class="archiv-group-arrow">▶</span>
+        <span class="archiv-group-id">ID: ${g.id}</span>
+        <span class="archiv-group-name">${g.name}</span>
+        <span class="archiv-group-count">${g.sanktionen.length} Sanktion${g.sanktionen.length !== 1 ? 'en' : ''}</span>
+      </div>
+      <div class="archiv-group-body" id="archiv-body-${gi}">
+        <table>
+          <thead><tr><th>SK Nr.</th><th>Grund der Sanktion</th><th>Strafe</th></tr></thead>
+          <tbody>
+            ${g.sanktionen.map(s => `<tr>
+              <td style="font-family:'Orbitron',monospace;font-size:11px;color:var(--cyan);">${s.nr||'—'}</td>
+              <td style="text-align:left;padding-left:12px;">${s.grund||'—'}</td>
+              <td>${s.strafe||'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `).join('');
+}
+
+window.toggleArchivGroup = function(gi) {
+  const header = document.querySelector(`#sank-archiv-container .archiv-group:nth-child(${gi+1}) .archiv-group-header`);
+  const body   = document.getElementById('archiv-body-'+gi);
+  if (!header || !body) return;
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  header.classList.toggle('open', !isOpen);
 }
 
 window.searchSanktionArchiv=function(){
   const q=document.getElementById('sank-archiv-search').value.trim().toLowerCase();
   if (!q){renderSanktionArchiv();return;}
-  renderSanktionArchiv(sanktionArchivData.filter(s=>(s.id||'').toLowerCase().includes(q)));
+  renderSanktionArchiv(sanktionArchivData.filter(s=>(s.id||'').toLowerCase().includes(q)||(s.name||'').toLowerCase().includes(q)));
 }
 
 window.deleteSanktionArchiv=function(){
