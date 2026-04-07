@@ -2387,7 +2387,10 @@ function applyRangPermissions(rang){
     const p6btns=document.querySelectorAll('#page6 .toolbar .tool-btn');
     p6btns.forEach(btn=>{
       const txt=btn.textContent.trim();
-      if (txt==='🔍'||txt==='📁') { btn.style.display=''; return; }
+      // 🔍 Lupe: immer sichtbar
+      if (txt==='🔍') { btn.style.display=''; return; }
+      // 📁 Ordner: nur ab Rang 7 aufwärts (nicht Rang 1 und Rang 6)
+      if (txt==='📁') { btn.style.display=(rn===1||rn===6)?'none':''; return; }
       if (rn===1||rn===6) { btn.style.display='none'; }
       else if (rn===7||rn===8) { btn.style.display='none'; }
       else if (rn===9||rn===10) { btn.style.display='none'; }
