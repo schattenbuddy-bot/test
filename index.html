@@ -2404,7 +2404,7 @@ function applyRangPermissions(rang){
     const p7btns=document.querySelectorAll('#page7 .toolbar .tool-btn');
     p7btns.forEach(btn=>{
       const txt=btn.textContent.trim();
-      if (rn===6) { btn.style.display=['🔍','📋','📁'].includes(txt)?'':'none'; }
+      if (rn===6) { btn.style.display=['🔍','📋'].includes(txt)?'':'none'; }
       else if (rn===9) {
         if (btn.classList.contains('red')&&txt==='＋') btn.style.display='';
         else btn.style.display=['🔍','📁','✏️'].includes(txt)?'':'none';
