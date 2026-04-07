@@ -2587,8 +2587,8 @@ function applyRangPermissions(rang){
       const txt=btn.textContent.trim();
       // 🔍 Lupe: immer sichtbar
       if (txt==='🔍') { btn.style.display=''; return; }
-      // 📁 Ordner: nur ab Rang 7 aufwärts (nicht Rang 1 und Rang 6)
-      if (txt==='📁') { btn.style.display=(rn===1||rn===6)?'none':''; return; }
+      // 📁 Ordner: nur ab Rang 7+8 und Ersteller/Leaderschaft/Admin (nicht Rang 1, 6, 9, 10)
+      if (txt==='📁') { btn.style.display=(rn===1||rn===6||rn===9||rn===10)?'none':''; return; }
       if (rn===1||rn===6) { btn.style.display='none'; }
       else if (rn===7||rn===8) { btn.style.display='none'; }
       else if (rn===9||rn===10) { btn.style.display='none'; }
