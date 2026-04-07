@@ -972,6 +972,7 @@
       <div style="font-size:11px;color:var(--text-muted);letter-spacing:2px;margin-top:4px;">VOLLSTÄNDIGES AUDIT-PROTOKOLL — NUR FÜR ERSTELLER</div>
     </div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+      <button class="tool-btn back" onclick="showPage(previousPage)">← Zurück</button>
       <button class="log-clear-btn" onclick="clearAllLogs()">🗑 Logs löschen</button>
       <button class="tool-btn" onclick="loadLogs()">↻ Aktualisieren</button>
     </div>
@@ -1046,6 +1047,7 @@ provider.setCustomParameters({ prompt: 'select_account' });
 // ===== STATE =====
 let currentUser = null;
 let currentPage = 1;
+let previousPage = 2;
 let mitarbeiterData = [];
 let archivData = [];
 let zugriffData = [];
@@ -1268,6 +1270,9 @@ window.closeModal = function(id) { document.getElementById(id).classList.remove(
 const HIDE_NAV_PAGES = [9,10,11,12,20];
 
 window.showPage = function(n) {
+  // Vorherige Seite merken (nur wenn nicht schon auf Seite 20)
+  if (currentPage !== 20 && n === 20) previousPage = currentPage;
+
   document.querySelectorAll('#innerPages .page').forEach(p => p.classList.remove('active'));
   const el = document.getElementById('page'+n);
   if (el) el.classList.add('active');
