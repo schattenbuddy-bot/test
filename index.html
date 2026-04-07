@@ -608,7 +608,7 @@
         <div class="sonder-box" id="db-sonder"></div>
         <div style="margin-top:12px;display:flex;gap:10px;align-items:center;">
           <input class="modal-input" autocomplete="off" id="db-beweis-sknr" placeholder="SK Nummer" style="width:110px;flex-shrink:0;">
-          <input class="modal-input" autocomplete="off" id="db-beweis-input" placeholder="Beweis-Link einfügen (nur Links)" style="flex:1;">
+          <input class="modal-input" autocomplete="off" id="db-beweis-input" placeholder="Sanktion abgearbeitet (nur Link)" style="flex:1;">
           <button class="tool-btn purple" onclick="sendBeweisLink()" style="white-space:nowrap;">Senden</button>
         </div>
         <div id="db-beweis-status" style="font-size:12px;color:var(--text-dim);margin-top:6px;"></div>
@@ -970,8 +970,11 @@
 <div class="modal-overlay" id="addSanktionModal">
   <div class="modal">
     <div class="modal-title">Sanktion Erstellen</div>
-    <div class="modal-field"><div class="modal-label">SK NR *</div><input class="modal-input" autocomplete="off" id="sank-nr" placeholder="SK Nummer"></div>
-    <div class="modal-field"><div class="modal-label">ID</div><input class="modal-input" autocomplete="off" id="sank-id" placeholder="Mitarbeiter ID"></div>
+    <div class="modal-field"><div class="modal-label">ID</div><input class="modal-input" autocomplete="off" id="sank-id" placeholder="Mitarbeiter ID" oninput="autoGenSkNr()"></div>
+    <div class="modal-field">
+      <div class="modal-label">SK NR <span style="color:var(--cyan);font-size:10px;">(automatisch)</span></div>
+      <input class="modal-input" autocomplete="off" id="sank-nr" placeholder="Wird automatisch generiert..." readonly style="opacity:0.6;cursor:not-allowed;background:rgba(0,0,0,0.3);">
+    </div>
     <div class="modal-field"><div class="modal-label">Name</div><input class="modal-input" autocomplete="off" id="sank-name" placeholder="Name"></div>
     <div class="modal-field"><div class="modal-label">Grund der Sanktion</div><input class="modal-input" autocomplete="off" id="sank-grund" placeholder="Grund"></div>
     <div class="modal-field"><div class="modal-label">Strafe</div><input class="modal-input" autocomplete="off" id="sank-strafe" placeholder="Strafe"></div>
@@ -1595,7 +1598,7 @@ function renderSonderInfos() {
       <div style="color:var(--red);font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:4px;">⚠ SANKTION ${s.nr||(i+1)}</div>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:3px;"><span style="color:var(--text);">Grund:</span> ${s.grund||'–'}</div>
       <div style="font-size:12px;color:var(--text-dim);"><span style="color:var(--text);">Strafe:</span> ${s.strafe||'–'}</div>
-      ${s.beweise?`<div style="font-size:11px;margin-top:4px;color:var(--cyan);word-break:break-all;">🔗 ${s.beweise}</div>`:''}
+      ${s.beweise?`<div style="font-size:11px;margin-top:4px;color:var(--cyan);word-break:break-all;">✅ Sanktion abgearbeitet</div>`:''}
     </div>`).join('');
 }
 
@@ -2171,21 +2174,51 @@ function renderSanktionen(filtered=null){
   </tr>`).join('');
 }
 
+window.autoGenSkNr = function() {
+  const eingabeId = document.getElementById('sank-id').value.trim();
+  const nrField   = document.getElementById('sank-nr');
+  if (!eingabeId) { nrField.value = ''; return; }
+
+  // Prüfen ob ID im Mitarbeiterregister existiert
+  const maExists = mitarbeiterData.find(m => m.id === eingabeId);
+  if (!maExists) { nrField.value = ''; return; }
+
+  // Alle bestehenden Sanktionen dieser ID zählen (aktiv + archiviert)
+  const aktivCount   = sanktionData.filter(s => s.id === eingabeId).length;
+  const archivCount  = sanktionArchivData.filter(s => s.id === eingabeId).length;
+  const gesamtCount  = aktivCount + archivCount;
+
+  // Nächste freie Nummer: höchste vorhandene Nummer + 1
+  // Alle SK-Nummern dieser ID sammeln um Lücken zu vermeiden
+  const alleNummern = [
+    ...sanktionData.filter(s => s.id === eingabeId),
+    ...sanktionArchivData.filter(s => s.id === eingabeId)
+  ].map(s => {
+    const parts = (s.nr || '').split('-');
+    return parseInt(parts[parts.length - 1]) || 0;
+  });
+  const hoechste = alleNummern.length > 0 ? Math.max(...alleNummern) : 0;
+  const naechste = hoechste + 1;
+
+  nrField.value = `${eingabeId}-${naechste}`;
+}
+
 window.addSanktion=async function(){
-  const nr=document.getElementById('sank-nr').value.trim();
-  if (!nr) return showNotif('SK NR erforderlich','error');
-  const eingabeId=document.getElementById('sank-id').value.trim();
+  const eingabeId = document.getElementById('sank-id').value.trim();
   if (!eingabeId) return showNotif('ID erforderlich','error');
 
   // Prüfen ob ID im Mitarbeiterregister existiert
-  const maExists=mitarbeiterData.find(m=>m.id===eingabeId);
+  const maExists = mitarbeiterData.find(m => m.id === eingabeId);
   if (!maExists) return showNotif(`ID "${eingabeId}" existiert nicht im Mitarbeiterregister!`,'error');
 
+  const nr = document.getElementById('sank-nr').value.trim();
+  if (!nr) return showNotif('SK NR konnte nicht generiert werden','error');
+
   const data={
-    nr, id:eingabeId,
-    name:document.getElementById('sank-name').value.trim(),
-    grund:document.getElementById('sank-grund').value.trim(),
-    strafe:document.getElementById('sank-strafe').value.trim(),
+    nr, id: eingabeId,
+    name: document.getElementById('sank-name').value.trim(),
+    grund: document.getElementById('sank-grund').value.trim(),
+    strafe: document.getElementById('sank-strafe').value.trim(),
     beweise:''
   };
   try {
@@ -2240,10 +2273,11 @@ window.showSanktionPage=function(nr){
       </div>
       <div class="table-wrapper">
         <table class="data-table" style="width:100%;">
-          <thead><tr><th>ID</th><th>Name</th><th>Beweise (Nur Links)</th></tr></thead>
+          <thead><tr><th>ID</th><th>Name</th><th>Sanktionsgrundbeweise</th><th>Sanktion abgearbeitet (nur Link)</th></tr></thead>
           <tbody><tr>
             <td id="sd-id-${s.nr}">${s.detailId||''}</td>
             <td id="sd-name-${s.nr}">${s.detailName||''}</td>
+            <td id="sd-grundbeweise-${s.nr}">${s.grundbeweise||''}</td>
             <td id="sd-beweise-${s.nr}">${s.beweise||''}</td>
           </tr></tbody>
         </table>
@@ -2269,6 +2303,7 @@ window.openEditSanktionModal=function(nr){
     <div class="modal-title">Sanktion Bearbeiten</div>
     <div class="modal-field"><div class="modal-label">ID (Eigene ID)</div><input class="modal-input" autocomplete="off" id="se-id" placeholder="Eigene ID"></div>
     <div class="modal-field"><div class="modal-label">Name (Eigener Name)</div><input class="modal-input" autocomplete="off" id="se-name" placeholder="Eigener Name"></div>
+    <div class="modal-field"><div class="modal-label">Sanktionsgrundbeweise</div><input class="modal-input" autocomplete="off" id="se-grundbeweise" placeholder="Sanktionsgrundbeweise"></div>
     <div class="modal-btns">
       <button class="btn-modal gray" onclick="document.getElementById('tmp-edit-modal').remove()">Abbrechen</button>
       <button class="btn-modal blue" onclick="saveSanktionEdit('${s._id}','${nr}')">Speichern</button>
@@ -2276,24 +2311,28 @@ window.openEditSanktionModal=function(nr){
   </div>`;
   document.body.appendChild(modal);
   setTimeout(()=>{
-    const idEl=document.getElementById('se-id');
-    const nameEl=document.getElementById('se-name');
-    if (idEl) idEl.value=s.detailId||'';
-    if (nameEl) nameEl.value=s.detailName||'';
+    const idEl         = document.getElementById('se-id');
+    const nameEl       = document.getElementById('se-name');
+    const grundEl      = document.getElementById('se-grundbeweise');
+    if (idEl)    idEl.value    = s.detailId||'';
+    if (nameEl)  nameEl.value  = s.detailName||'';
+    if (grundEl) grundEl.value = s.grundbeweise||'';
   },30);
 }
 
 window.saveSanktionEdit=async function(docId,nr){
-  const detailId=document.getElementById('se-id').value;
-  const detailName=document.getElementById('se-name').value;
-  const s=sanktionData.find(x=>x._id===docId);
+  const detailId      = document.getElementById('se-id').value;
+  const detailName    = document.getElementById('se-name').value;
+  const grundbeweise  = document.getElementById('se-grundbeweise').value;
   try {
-    await updateDoc(doc(db,'sanktionen',docId),{detailId,detailName});
+    await updateDoc(doc(db,'sanktionen',docId),{detailId, detailName, grundbeweise});
     await writeLog('sanktion','update',`Sanktion SK-${nr} Detailseite bearbeitet — ID: ${detailId}, Name: ${detailName}`,detailId||nr);
-    const idEl=document.getElementById('sd-id-'+nr);
-    if (idEl) idEl.textContent=detailId;
-    const nameEl=document.getElementById('sd-name-'+nr);
-    if (nameEl) nameEl.textContent=detailName;
+    const idEl    = document.getElementById('sd-id-'+nr);
+    if (idEl) idEl.textContent = detailId;
+    const nameEl  = document.getElementById('sd-name-'+nr);
+    if (nameEl) nameEl.textContent = detailName;
+    const grundEl = document.getElementById('sd-grundbeweise-'+nr);
+    if (grundEl) grundEl.textContent = grundbeweise;
     document.getElementById('tmp-edit-modal').remove();
     showNotif('Gespeichert','success');
   } catch(e) { showNotif('Fehler: '+e.message,'error'); }
