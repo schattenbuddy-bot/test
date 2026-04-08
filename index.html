@@ -1,3284 +1,579 @@
-<!DOCTYPE html>
-<html lang="de">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LSPD Personal Terminal</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
-
-  :root {
-    --bg-dark: #06090f;
-    --bg-panel: #0b1220;
-    --bg-card: #0d1525;
-    --bg-card2: #101828;
-    --border: #1e3a5f;
-    --border-bright: #2a5a9f;
-    --gold: #c8922a;
-    --gold-light: #e8b84b;
-    --cyan: #00d4ff;
-    --cyan-dim: rgba(0,212,255,0.15);
-    --orange: #e07b20;
-    --text: #d8eaf8;
-    --text-dim: #5a8ab0;
-    --text-muted: #2a4a6a;
-    --purple: #8b5cf6;
-    --green: #22c55e;
-    --red: #ef4444;
-    --yellow: #eab308;
-  }
-
-  * { margin:0; padding:0; box-sizing:border-box; }
-
-  body {
-    font-family: 'Rajdhani', sans-serif;
-    background: var(--bg-dark);
-    color: var(--text);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  .page { display: none; }
-  .page.active { display: block; }
-  #page1 { display: none; min-height: 100vh; }
-  #page1.active { display: flex; }
-
-  .notification {
-    position: fixed; top: 20px; right: 20px; z-index: 9999;
-    padding: 12px 20px; border-radius: 4px;
-    font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 14px;
-    animation: slideIn 0.3s ease; max-width: 380px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-  }
-  .notification.success { background: #0d2818; border: 1px solid #22c55e; color: #86efac; }
-  .notification.error   { background: #200a0a; border: 1px solid #ef4444; color: #fca5a5; }
-  @keyframes slideIn { from { transform:translateX(120px); opacity:0; } to { transform:translateX(0); opacity:1; } }
-
-  #loadingScreen {
-    position: fixed; inset: 0; z-index: 99999;
-    background: #06090f;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 24px;
-  }
-  #loadingScreen.hidden { display: none; }
-  .loader-ring {
-    width: 90px; height: 90px; border-radius: 50%;
-    border: 2px solid rgba(200,146,42,0.2);
-    border-top-color: var(--gold);
-    border-right-color: var(--gold-light);
-    animation: spin 1s linear infinite;
-    box-shadow: 0 0 30px rgba(200,146,42,0.2);
-  }
-  @keyframes spin { to { transform:rotate(360deg); } }
-  .loader-title {
-    font-family: 'Orbitron', monospace; font-size: 20px; font-weight: 900;
-    color: white; letter-spacing: 4px;
-  }
-  .loader-title span { color: var(--gold); }
-  .loader-sub {
-    font-family: 'Rajdhani', sans-serif; color: var(--text-dim);
-    font-size: 11px; letter-spacing: 5px; text-transform: uppercase;
-    animation: blink 1.8s ease infinite;
-  }
-  @keyframes blink { 0%,100%{opacity:0.2;} 50%{opacity:1;} }
-
-  #page1 {
-    background:
-      radial-gradient(ellipse at 20% 50%, rgba(13,35,70,0.9) 0%, transparent 60%),
-      radial-gradient(ellipse at 80% 20%, rgba(0,80,140,0.3) 0%, transparent 50%),
-      linear-gradient(180deg, #08111f 0%, #06090f 100%);
-    align-items: center; justify-content: center;
-    position: relative; overflow: hidden;
-  }
-  #page1::before {
-    content:''; position:absolute; inset:0; pointer-events:none;
-    background-image:
-      linear-gradient(rgba(0,180,255,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,180,255,0.04) 1px, transparent 1px);
-    background-size: 60px 60px;
-    animation: gridScroll 25s linear infinite;
-  }
-  #page1::after {
-    content:''; position:absolute; bottom:0; left:0; right:0; height:2px;
-    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-    opacity:0.3;
-  }
-  @keyframes gridScroll { from{background-position:0 0;} to{background-position:60px 60px;} }
-
-  .page1-corner { position:absolute; width:60px; height:60px; pointer-events:none; }
-  .page1-corner.tl { top:16px; left:16px; border-top:2px solid var(--gold); border-left:2px solid var(--gold); }
-  .page1-corner.tr { top:16px; right:16px; border-top:2px solid var(--gold); border-right:2px solid var(--gold); }
-  .page1-corner.bl { bottom:16px; left:16px; border-bottom:2px solid var(--gold); border-left:2px solid var(--gold); }
-  .page1-corner.br { bottom:16px; right:16px; border-bottom:2px solid var(--gold); border-right:2px solid var(--gold); }
-
-  .p1-statusbar {
-    position:absolute; top:20px; right:24px;
-    display:flex; align-items:center; gap:10px;
-    font-family:'Orbitron',monospace; font-size:10px;
-    color: var(--cyan); letter-spacing:2px;
-  }
-  .p1-signal { display:flex; align-items:flex-end; gap:2px; }
-  .p1-signal span { width:3px; background:var(--cyan); border-radius:1px; display:block; }
-  .p1-signal span:nth-child(1){height:5px;}
-  .p1-signal span:nth-child(2){height:8px;}
-  .p1-signal span:nth-child(3){height:11px;}
-  .p1-signal span:nth-child(4){height:14px;}
-  .p1-signal span:nth-child(5){height:17px; opacity:0.3;}
-
-  .login-box {
-    position:relative; z-index:2;
-    display:grid; grid-template-columns:420px 480px;
-    background: rgba(8,17,32,0.92);
-    border: 1px solid var(--border);
-    border-radius:6px;
-    box-shadow:
-      0 0 0 1px rgba(200,146,42,0.1),
-      0 0 80px rgba(0,60,140,0.3),
-      0 30px 80px rgba(0,0,0,0.6),
-      inset 0 1px 0 rgba(255,255,255,0.04);
-    overflow:hidden;
-    max-width: 95vw;
-  }
-
-  .login-left {
-    background:
-      radial-gradient(circle at 50% 45%, rgba(20,50,100,0.6) 0%, transparent 70%),
-      linear-gradient(180deg, rgba(10,25,50,0.8) 0%, rgba(5,12,25,0.9) 100%);
-    border-right: 1px solid var(--border);
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    padding: 50px 40px; position:relative; gap:20px;
-  }
-
-  .badge-outer {
-    width:230px; height:230px; border-radius:50%;
-    background: conic-gradient(from 45deg, #0d2040, #1a3a6b, #0d2040, #243a6b, #0d2040);
-    border: 2px solid var(--gold);
-    display:flex; align-items:center; justify-content:center;
-    box-shadow:
-      0 0 0 6px rgba(200,146,42,0.08),
-      0 0 40px rgba(200,146,42,0.25),
-      0 0 80px rgba(0,100,200,0.15),
-      inset 0 0 30px rgba(0,30,80,0.5);
-    position:relative;
-    animation: badgePulse 4s ease infinite;
-  }
-  @keyframes badgePulse {
-    0%,100%{box-shadow:0 0 0 6px rgba(200,146,42,0.08),0 0 40px rgba(200,146,42,0.25),0 0 80px rgba(0,100,200,0.15),inset 0 0 30px rgba(0,30,80,0.5);}
-    50%{box-shadow:0 0 0 8px rgba(200,146,42,0.15),0 0 60px rgba(200,146,42,0.4),0 0 120px rgba(0,100,200,0.25),inset 0 0 30px rgba(0,30,80,0.5);}
-  }
-  .badge-inner-ring {
-    width:190px; height:190px; border-radius:50%;
-    background: radial-gradient(circle, #102040 0%, #061020 60%, #030810 100%);
-    border: 1px solid rgba(200,146,42,0.4);
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    gap:4px;
-  }
-  .badge-arc-top { font-family:'Orbitron',monospace; font-size:7px; font-weight:700; color:var(--gold); letter-spacing:3px; text-transform:uppercase; margin-bottom:-2px; }
-  .badge-stars { color:var(--gold); font-size:9px; letter-spacing:4px; }
-  .badge-eagle-icon { font-size:52px; line-height:1; filter:drop-shadow(0 2px 8px rgba(200,146,42,0.5)); }
-  .badge-shield { font-size:22px; margin-top:-4px; }
-  .badge-lspd { font-family:'Orbitron',monospace; font-size:16px; font-weight:900; color:white; letter-spacing:5px; text-shadow: 0 0 15px rgba(200,146,42,0.5); }
-  .badge-arc-bottom { font-family:'Orbitron',monospace; font-size:6px; font-weight:700; color:var(--gold); letter-spacing:2px; text-transform:uppercase; border-top:1px solid rgba(200,146,42,0.3); padding-top:4px; margin-top:2px; }
-
-  .badge-scan {
-    position:absolute; width:100%; height:2px;
-    background:linear-gradient(90deg, transparent, rgba(0,212,255,0.4), transparent);
-    animation: scan 3s ease-in-out infinite;
-    pointer-events:none;
-  }
-  @keyframes scan { 0%{top:10%; opacity:0;} 10%{opacity:1;} 90%{opacity:1;} 100%{top:90%; opacity:0;} }
-
-  .login-time { position:absolute; bottom:18px; left:20px; font-family:'Orbitron',monospace; font-size:10px; color:var(--text-muted); letter-spacing:1px; }
-
-  .login-right { padding: 52px 48px; display:flex; flex-direction:column; justify-content:center; }
-
-  .login-title { font-family:'Orbitron',monospace; font-weight:900; font-size:30px; color:white; line-height:1.1; margin-bottom:6px; }
-  .login-title .lspd-word { color:var(--gold); }
-
-  .login-subtitle-line { display:flex; align-items:center; gap:10px; margin-bottom:30px; }
-  .login-subtitle-line::before,.login-subtitle-line::after { content:''; flex:1; height:1px; background:linear-gradient(90deg, transparent, var(--gold), transparent); opacity:0.5; }
-  .login-subtitle-text { font-family:'Rajdhani',sans-serif; font-size:11px; color:var(--cyan); letter-spacing:4px; text-transform:uppercase; white-space:nowrap; }
-
-  .login-section-title { font-family:'Rajdhani',sans-serif; font-size:13px; color:var(--text-dim); letter-spacing:1px; margin-bottom:18px; text-transform:uppercase; }
-
-  .login-field-fake { display:flex; align-items:center; gap:12px; padding:13px 16px; background:rgba(10,20,40,0.7); border:1px solid var(--border); border-radius:3px; margin-bottom:12px; color:var(--text-muted); font-family:'Rajdhani',sans-serif; font-size:14px; letter-spacing:1px; box-shadow:inset 0 1px 3px rgba(0,0,0,0.3); }
-  .field-icon { color:var(--gold); font-size:14px; }
-
-  .btn-access { width:100%; padding:15px; background:linear-gradient(135deg, #b8821a 0%, #c8922a 40%, #a07020 100%); border:1px solid var(--gold); border-radius:3px; color:white; font-family:'Orbitron',monospace; font-size:12px; font-weight:700; letter-spacing:3px; cursor:pointer; transition:all 0.25s; text-transform:uppercase; box-shadow:0 0 20px rgba(200,146,42,0.2), inset 0 1px 0 rgba(255,255,255,0.1); margin-bottom:10px; position:relative; overflow:hidden; }
-  .btn-access::after { content:''; position:absolute; inset:0; background:linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%); }
-  .btn-access:hover { box-shadow:0 0 40px rgba(200,146,42,0.5), inset 0 1px 0 rgba(255,255,255,0.1); transform:translateY(-1px); }
-
-  .btn-register-p1 { width:100%; padding:13px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--text-dim); font-family:'Orbitron',monospace; font-size:10px; font-weight:400; letter-spacing:2px; cursor:pointer; transition:all 0.25s; text-transform:uppercase; }
-  .btn-register-p1:hover { border-color:var(--cyan); color:var(--cyan); }
-
-  .login-error-msg { color:var(--red); font-size:12px; text-align:center; margin-top:10px; display:none; letter-spacing:1px; padding:8px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2); border-radius:3px; }
-
-  .fp-area { text-align:center; margin-top:22px; display:flex; flex-direction:column; align-items:center; gap:8px; }
-  .fp-circle { width:44px; height:44px; border-radius:50%; border:1px solid rgba(0,212,255,0.3); display:flex; align-items:center; justify-content:center; font-size:22px; box-shadow:0 0 20px rgba(0,212,255,0.15); animation:fpPulse 2.5s ease infinite; }
-  @keyframes fpPulse { 0%,100%{box-shadow:0 0 10px rgba(0,212,255,0.1); border-color:rgba(0,212,255,0.2);} 50%{box-shadow:0 0 30px rgba(0,212,255,0.35); border-color:rgba(0,212,255,0.6);} }
-  .fp-dot { width:6px; height:6px; border-radius:50%; background:var(--cyan); opacity:0.5; }
-
-  .login-footer-bar { position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,0.4); border-top:1px solid var(--border); padding:8px 20px; text-align:center; font-family:'Rajdhani',sans-serif; font-size:10px; color:var(--text-muted); letter-spacing:2px; text-transform:uppercase; }
-
-  /* NAV BAR */
-  .nav-bar { background: linear-gradient(180deg, #0c1828 0%, #080f1e 100%); border-bottom: 1px solid var(--border); position:sticky; top:0; z-index:100; }
-  .nav-header { display:flex; align-items:center; gap:14px; padding:10px 20px; border-bottom:1px solid rgba(30,58,95,0.6); background:linear-gradient(90deg, rgba(200,146,42,0.05) 0%, transparent 40%); }
-  .nav-badge-small { width:36px; height:36px; border-radius:50%; background:conic-gradient(from 0deg, #1a3a6b, #0d2040, #1a3a6b); border:1px solid var(--gold); display:flex; align-items:center; justify-content:center; font-size:15px; box-shadow:0 0 10px rgba(200,146,42,0.2); }
-  .nav-logo { font-family:'Orbitron',monospace; font-size:18px; font-weight:900; color:white; letter-spacing:1px; }
-  .nav-logo span { color:var(--gold); }
-  .nav-logo-sub { font-size:9px; color:var(--text-muted); letter-spacing:3px; text-transform:uppercase; margin-top:1px; }
-  .nav-divider { flex:1; height:1px; background:linear-gradient(90deg,transparent,var(--border),transparent); }
-
-  .nav-buttons { display:flex; background:rgba(0,0,0,0.2); flex-wrap:wrap; }
-  .nav-btn { padding:9px 20px; background:transparent; border:none; border-right:1px solid rgba(30,58,95,0.5); color:var(--text-dim); font-family:'Rajdhani',sans-serif; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; white-space:nowrap; letter-spacing:0.5px; position:relative; }
-  .nav-btn:hover { background:rgba(0,150,255,0.08); color:var(--text); }
-  .nav-btn.active { background:var(--orange); color:white; box-shadow:inset 0 -2px 0 rgba(255,255,255,0.2); }
-  .nav-btn.active::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; background:rgba(255,255,255,0.3); }
-  /* Aktivitätslog Button - speziell */
-  .nav-btn.log-btn { background:rgba(139,92,246,0.15); color:#a78bfa; border-left:1px solid rgba(139,92,246,0.4); border-right:1px solid rgba(30,58,95,0.5); }
-  .nav-btn.log-btn:hover { background:rgba(139,92,246,0.3); color:#c4b5fd; }
-  .nav-btn.log-btn.active { background:linear-gradient(135deg,#5b21b6,#7c3aed); color:white; }
-
-  #innerPages { min-height:100vh; background: radial-gradient(ellipse at 10% 20%, rgba(0,50,120,0.12) 0%, transparent 50%), radial-gradient(ellipse at 90% 80%, rgba(0,30,80,0.1) 0%, transparent 50%), var(--bg-dark); }
-
-  /* DASHBOARD */
-  .dashboard-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; max-width:1600px; margin:0 auto; padding:30px 30px 20px; }
-  .dashboard-separator { height:3px; background: linear-gradient(90deg, transparent, #000, #000, #000, transparent); border:none; margin:0; }
-  .db-card { background:var(--bg-card); border:1px solid var(--border); border-radius:4px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.3); }
-  .db-card-header { padding:10px 16px; font-weight:700; font-size:13px; letter-spacing:2px; text-align:center; text-transform:uppercase; border-bottom:1px solid rgba(255,255,255,0.05); }
-  .db-card-header.purple { background:linear-gradient(135deg,#5b21b6,#7c3aed); }
-  .db-card-header.orange { background:linear-gradient(135deg,#b45309,#e07b20); }
-  .db-field { display:grid; grid-template-columns:140px 1fr; border-bottom:1px solid rgba(30,58,95,0.25); }
-  .db-field:last-child { border-bottom:none; }
-  .db-label { padding:8px 10px; color:var(--text-dim); font-size:12px; border-right:1px solid rgba(30,58,95,0.25); letter-spacing:0.5px; }
-  .db-value { padding:8px 10px; color:var(--text); font-size:13px; font-weight:600; }
-  .sonder-box { background:rgba(5,10,20,0.6); border:1px solid var(--border); padding:18px; min-height:160px; color:var(--text-muted); font-size:15px; border-radius:2px; margin:12px; line-height:1.7; }
-  .btn-abmelden { position:fixed; bottom:20px; right:20px; padding:10px 22px; background:rgba(127,29,29,0.9); border:1px solid var(--red); color:white; font-family:'Rajdhani',sans-serif; font-weight:700; cursor:pointer; border-radius:3px; font-size:13px; letter-spacing:1px; transition:all 0.2s; box-shadow:0 0 20px rgba(239,68,68,0.2); }
-  .btn-abmelden:hover { background:var(--red); box-shadow:0 0 30px rgba(239,68,68,0.4); }
-
-  .ausb-chk-cell { width:28px; text-align:center; padding:5px 4px; border-bottom:1px solid rgba(30,58,95,0.2); font-size:14px; }
-  .ausb-lbl-cell { padding:5px 10px 5px 2px; font-size:12px; font-weight:600; color:var(--text); border-bottom:1px solid rgba(30,58,95,0.2); border-right:1px solid rgba(30,58,95,0.15); }
-
-  .wip-banner { background:linear-gradient(135deg,#7f1d1d,#991b1b); border:1px solid rgba(239,68,68,0.3); color:white; text-align:center; padding:13px; font-weight:700; letter-spacing:3px; font-size:13px; margin:20px; border-radius:3px; box-shadow:0 0 20px rgba(239,68,68,0.15); }
-
-  /* TOOLBAR */
-  .toolbar { display:flex; align-items:center; gap:6px; padding:10px 12px; background:var(--bg-panel); border-bottom:1px solid var(--border); flex-wrap:wrap; }
-  .tool-btn { padding:6px 12px; background:rgba(13,21,37,0.8); border:1px solid var(--border); color:var(--text); cursor:pointer; border-radius:3px; font-size:13px; transition:all 0.2s; white-space:nowrap; font-family:'Rajdhani',sans-serif; font-weight:600; }
-  .tool-btn:hover { background:rgba(0,150,255,0.1); border-color:var(--border-bright); }
-  .tool-btn.purple { background:rgba(76,29,149,0.7); border-color:#7c3aed; color:white; }
-  .tool-btn.purple:hover { background:rgba(109,40,217,0.8); }
-  .tool-btn.red { background:rgba(127,29,29,0.7); border-color:#ef4444; color:white; }
-  .tool-btn.red:hover { background:rgba(185,28,28,0.8); }
-  .tool-btn.back { background:rgba(10,10,40,0.8); border-color:#4c3aed; color:#8b7cf6; font-weight:700; }
-  .search-input { padding:6px 12px; background:rgba(6,9,15,0.8); border:1px solid var(--border); color:var(--text); font-family:'Rajdhani',sans-serif; font-size:13px; border-radius:3px; width:200px; transition:border-color 0.2s; }
-  .search-input:focus { outline:none; border-color:var(--cyan); }
-  .ml-auto { margin-left:auto; }
-
-  /* TABLES */
-  .table-wrapper { overflow-x:auto; }
-  .sep-col { background:#000 !important; width:6px !important; min-width:6px !important; max-width:6px !important; padding:0 !important; border:none !important; }
-  .data-table { width:100%; border-collapse:collapse; font-size:12px; }
-  .data-table th { background:rgba(10,20,40,0.9); padding:9px 6px; text-align:center; border:1px solid var(--border); color:var(--text-dim); font-size:11px; white-space:nowrap; letter-spacing:0.5px; text-transform:uppercase; }
-  .data-table td { padding:6px 5px; border:1px solid rgba(30,58,95,0.3); text-align:center; color:var(--text); }
-  .data-table tbody tr:hover td { background:rgba(0,100,200,0.07); }
-
-  .sk-container { overflow-x:auto; padding:12px; }
-  .sk-table { width:100%; border-collapse:collapse; font-size:11px; }
-  .sk-table th, .sk-table td { border:1px solid var(--border); padding:6px 5px; text-align:center; white-space:nowrap; }
-  .sk-table th { background:rgba(10,20,40,0.9); color:var(--text-dim); letter-spacing:0.5px; }
-
-  .div-suspended  { background:#dc2626; color:white; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-cadet      { background:#60a5fa; color:#001; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-tow        { background:#60a5fa; color:#001; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-rookie     { background:#60a5fa; color:#001; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-officer    { background:#16a34a; color:white; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-command    { background:#ea580c; color:white; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-media      { background:#ec4899; color:white; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-department { background:#7c3aed; color:white; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-highcommand{ background:#2563eb; color:white; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-hclead     { background:#1d4ed8; color:white; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-leadership { background:#dc2626; color:white; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-  .div-leader     { background:#991b1b; color:white; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:700; white-space:nowrap; }
-
-  /* MODALS */
-  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; z-index:1000; }
-  .modal-overlay.open { display:flex; }
-  .modal { background:linear-gradient(180deg, #0e1a2e 0%, #0b1422 100%); border:1px solid var(--border); border-radius:6px; padding:28px; width:520px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 0 0 1px rgba(200,146,42,0.08), 0 30px 80px rgba(0,0,0,0.7); }
-  .modal.red { border-color:rgba(239,68,68,0.5); }
-  .modal-title { font-family:'Orbitron',monospace; font-size:16px; font-weight:700; margin-bottom:22px; color:var(--cyan); letter-spacing:1px; padding-bottom:12px; border-bottom:1px solid var(--border); }
-  .modal.red .modal-title { color:var(--red); }
-  .modal-field { margin-bottom:13px; }
-  .modal-label { font-size:11px; color:var(--text-dim); margin-bottom:5px; letter-spacing:1px; text-transform:uppercase; }
-  .modal-input { width:100%; padding:9px 12px; background:rgba(5,10,20,0.8); border:1px solid var(--border); border-radius:3px; color:var(--text); font-family:'Rajdhani',sans-serif; font-size:14px; transition:border-color 0.2s; }
-  .modal-input:focus { outline:none; border-color:var(--cyan); background:rgba(0,20,50,0.6); }
-  select.modal-input { cursor:pointer; }
-  .modal-warning { color:#fca5a5; font-size:12px; background:rgba(127,29,29,0.3); border:1px solid rgba(239,68,68,0.3); padding:12px; border-radius:3px; margin:12px 0; line-height:1.5; }
-  .modal-check-row { display:flex; align-items:flex-start; gap:10px; margin:12px 0; font-size:13px; color:var(--text-dim); }
-  .modal-check-row input { margin-top:3px; flex-shrink:0; }
-  .modal-btns { display:flex; gap:10px; justify-content:flex-end; margin-top:22px; padding-top:16px; border-top:1px solid var(--border); }
-  .btn-modal { padding:9px 22px; border:none; border-radius:3px; cursor:pointer; font-family:'Rajdhani',sans-serif; font-weight:700; font-size:14px; letter-spacing:0.5px; transition:all 0.2s; }
-  .btn-modal.green { background:linear-gradient(135deg,#15803d,#22c55e); color:white; }
-  .btn-modal.green:hover { background:linear-gradient(135deg,#16a34a,#4ade80); }
-  .btn-modal.red { background:linear-gradient(135deg,#991b1b,#ef4444); color:white; }
-  .btn-modal.gray { background:#1f2937; color:#9ca3af; border:1px solid #374151; }
-  .btn-modal.blue { background:linear-gradient(135deg,#1d4ed8,#3b82f6); color:white; }
-  .spinner-row { display:flex; align-items:center; gap:10px; }
-  .spinner-btn { width:30px; height:30px; background:rgba(13,21,37,0.8); border:1px solid var(--border); color:white; cursor:pointer; font-size:16px; border-radius:3px; transition:all 0.2s; }
-  .spinner-btn:hover { background:rgba(0,100,200,0.3); }
-  .spinner-val { width:40px; text-align:center; font-size:16px; font-weight:700; color:var(--gold); }
-
-  .status-freigegeben { color:var(--green); font-weight:700; font-size:12px; }
-  .status-wartet { color:var(--yellow); font-weight:700; font-size:12px; }
-  select.freigabe-select { background:rgba(6,9,15,0.9); border:1px solid var(--border); color:var(--text); padding:3px 6px; border-radius:2px; font-size:12px; }
-
-  .inner-title { font-family:'Orbitron',monospace; font-size:26px; font-weight:900; text-align:center; padding:16px 20px; color:white; letter-spacing:2px; border-bottom:1px solid var(--border); background:linear-gradient(180deg, rgba(200,146,42,0.05) 0%, transparent 100%); text-shadow:0 0 30px rgba(200,146,42,0.2); }
-
-  /* ===== AKTIVITÄTSLOG PAGE 20 ===== */
-  .log-page-header {
-    padding:20px 24px;
-    background:linear-gradient(135deg, rgba(76,29,149,0.3) 0%, rgba(17,24,39,0.8) 100%);
-    border-bottom:1px solid rgba(139,92,246,0.3);
-    display:flex; align-items:center; gap:16px;
-  }
-  .log-title { font-family:'Orbitron',monospace; font-size:22px; font-weight:900; color:white; letter-spacing:2px; }
-  .log-title span { color:#a78bfa; }
-  .log-stats-bar {
-    display:flex; gap:16px; padding:12px 24px;
-    background:rgba(0,0,0,0.3); border-bottom:1px solid var(--border);
-    flex-wrap:wrap;
-  }
-  .log-stat { display:flex; flex-direction:column; align-items:center; gap:2px; }
-  .log-stat-val { font-family:'Orbitron',monospace; font-size:18px; font-weight:900; color:#a78bfa; }
-  .log-stat-lbl { font-size:10px; color:var(--text-muted); letter-spacing:1px; text-transform:uppercase; }
-  .log-filters {
-    display:flex; gap:8px; padding:10px 12px;
-    background:var(--bg-panel); border-bottom:1px solid var(--border); flex-wrap:wrap;
-  }
-  .log-filter-btn {
-    padding:5px 14px; border-radius:20px; border:1px solid var(--border);
-    background:transparent; color:var(--text-dim); cursor:pointer;
-    font-family:'Rajdhani',sans-serif; font-size:12px; font-weight:600;
-    transition:all 0.2s; white-space:nowrap;
-  }
-  .log-filter-btn:hover { border-color:var(--border-bright); color:var(--text); }
-  .log-filter-btn.active { background:rgba(139,92,246,0.3); border-color:#7c3aed; color:#c4b5fd; }
-  .log-filter-btn.all.active { background:rgba(0,212,255,0.15); border-color:var(--cyan); color:var(--cyan); }
-
-  .log-table-wrap { overflow-x:auto; padding:0; }
-  .log-table { width:100%; border-collapse:collapse; font-size:12px; }
-  .log-table th { background:rgba(10,20,40,0.95); padding:10px 8px; text-align:left; border-bottom:2px solid rgba(139,92,246,0.3); color:#a78bfa; font-size:10px; letter-spacing:1px; text-transform:uppercase; font-weight:700; white-space:nowrap; }
-  .log-table td { padding:8px 8px; border-bottom:1px solid rgba(30,58,95,0.2); color:var(--text); vertical-align:middle; }
-  .log-table tbody tr:hover td { background:rgba(139,92,246,0.05); }
-
-  .log-action-badge {
-    display:inline-block; padding:2px 8px; border-radius:3px;
-    font-size:10px; font-weight:700; letter-spacing:0.5px; white-space:nowrap;
-  }
-  .log-action-create { background:rgba(34,197,94,0.2); color:#86efac; border:1px solid rgba(34,197,94,0.3); }
-  .log-action-update { background:rgba(59,130,246,0.2); color:#93c5fd; border:1px solid rgba(59,130,246,0.3); }
-  .log-action-delete { background:rgba(239,68,68,0.2); color:#fca5a5; border:1px solid rgba(239,68,68,0.3); }
-  .log-action-freigabe { background:rgba(234,179,8,0.2); color:#fde047; border:1px solid rgba(234,179,8,0.3); }
-  .log-action-archiv { background:rgba(249,115,22,0.2); color:#fdba74; border:1px solid rgba(249,115,22,0.3); }
-
-  .log-category-badge {
-    display:inline-block; padding:2px 7px; border-radius:2px;
-    font-size:10px; font-weight:700; white-space:nowrap;
-  }
-  .log-cat-mitarbeiter { background:rgba(16,185,129,0.2); color:#6ee7b7; }
-  .log-cat-zugriff { background:rgba(59,130,246,0.2); color:#93c5fd; }
-  .log-cat-sanktion { background:rgba(239,68,68,0.2); color:#fca5a5; }
-  .log-cat-sk { background:rgba(139,92,246,0.2); color:#c4b5fd; }
-
-  .log-empty { text-align:center; padding:60px 20px; color:var(--text-muted); }
-  .log-empty-icon { font-size:48px; margin-bottom:12px; opacity:0.3; }
-
-  .log-pagination { display:flex; align-items:center; justify-content:center; gap:8px; padding:16px; border-top:1px solid var(--border); }
-  .log-page-btn { padding:6px 14px; background:rgba(13,21,37,0.8); border:1px solid var(--border); color:var(--text-dim); cursor:pointer; border-radius:3px; font-size:12px; transition:all 0.2s; }
-  .log-page-btn:hover { border-color:var(--border-bright); color:var(--text); }
-  .log-page-btn.active { background:rgba(139,92,246,0.3); border-color:#7c3aed; color:#c4b5fd; }
-  .log-page-info { font-size:11px; color:var(--text-muted); letter-spacing:1px; }
-
-  .log-clear-btn { padding:6px 14px; background:rgba(127,29,29,0.5); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; cursor:pointer; border-radius:3px; font-size:12px; transition:all 0.2s; margin-left:auto; }
-  .log-clear-btn:hover { background:rgba(185,28,28,0.6); }
-
-  /* ===== SEITE 19 - ENTLASSUNGSARCHIV ===== */
-  .entlass-group {
-    margin-bottom:10px;
-    border:1px solid var(--border);
-    border-radius:4px;
-    overflow:hidden;
-  }
-  .entlass-group-header {
-    display:flex; align-items:center; gap:12px;
-    padding:12px 16px;
-    background:linear-gradient(135deg, rgba(10,20,40,0.95), rgba(15,28,55,0.9));
-    cursor:pointer; user-select:none;
-    transition:background 0.2s;
-  }
-  .entlass-group-header:hover { background:linear-gradient(135deg, rgba(0,60,140,0.2), rgba(10,30,70,0.95)); }
-  .entlass-group-header.open { border-bottom:1px solid var(--border); }
-  .entlass-group-arrow { font-size:11px; color:var(--cyan); transition:transform 0.25s; flex-shrink:0; }
-  .entlass-group-header.open .entlass-group-arrow { transform:rotate(90deg); }
-  .entlass-group-title { font-family:'Orbitron',monospace; font-size:13px; font-weight:700; color:white; letter-spacing:1px; }
-  .entlass-group-zeitraum { font-size:11px; color:var(--text-dim); }
-  .entlass-group-count { margin-left:auto; background:rgba(30,58,95,0.5); border:1px solid var(--border); color:var(--text-dim); font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; white-space:nowrap; }
-  .entlass-group-body { display:none; }
-  .entlass-group-body.open { display:block; }
-  .archiv-group {
-    margin-bottom:10px;
-    border:1px solid var(--border);
-    border-radius:4px;
-    overflow:hidden;
-  }
-  .archiv-group-header {
-    display:flex; align-items:center; gap:12px;
-    padding:10px 16px;
-    background:linear-gradient(135deg, rgba(10,20,40,0.95), rgba(15,28,55,0.9));
-    cursor:pointer; user-select:none;
-    transition:background 0.2s;
-    border-bottom:1px solid transparent;
-  }
-  .archiv-group-header:hover { background:linear-gradient(135deg, rgba(0,80,180,0.15), rgba(10,30,70,0.95)); }
-  .archiv-group-header.open { border-bottom:1px solid var(--border); }
-  .archiv-group-arrow {
-    font-size:11px; color:var(--cyan);
-    transition:transform 0.25s; flex-shrink:0;
-  }
-  .archiv-group-header.open .archiv-group-arrow { transform:rotate(90deg); }
-  .archiv-group-id {
-    font-family:'Orbitron',monospace; font-size:13px;
-    font-weight:700; color:var(--cyan); letter-spacing:1px;
-  }
-  .archiv-group-name { font-size:13px; color:var(--text); font-weight:600; }
-  .archiv-group-count {
-    margin-left:auto;
-    background:rgba(239,68,68,0.2); border:1px solid rgba(239,68,68,0.3);
-    color:#fca5a5; font-size:11px; font-weight:700;
-    padding:2px 9px; border-radius:20px; white-space:nowrap;
-  }
-  .archiv-group-body { display:none; }
-  .archiv-group-body.open { display:block; }
-  .archiv-group-body table { width:100%; border-collapse:collapse; font-size:12px; }
-  .archiv-group-body th {
-    background:rgba(5,12,25,0.9); padding:7px 8px;
-    text-align:center; border-bottom:1px solid var(--border);
-    color:var(--text-dim); font-size:10px; letter-spacing:0.5px; text-transform:uppercase;
-  }
-  .archiv-group-body td {
-    padding:7px 8px; border-bottom:1px solid rgba(30,58,95,0.2);
-    text-align:center; color:var(--text);
-  }
-  .archiv-group-body tbody tr:last-child td { border-bottom:none; }
-  .archiv-group-body tbody tr:hover td { background:rgba(239,68,68,0.05); }
-  .archiv-empty { text-align:center; padding:40px; color:var(--text-muted); font-size:13px; letter-spacing:1px; }
-
-  /* ===== SANKTION NEUE NACHRICHT MARKIERUNG ===== */
-  .sank-row-new td {
-    border-color: rgba(239,68,68,0.6) !important;
-  }
-  .sank-row-new td:first-child {
-    border-left: 3px solid #dc2626 !important;
-  }
-  .sank-new-badge {
-    display:inline-block; background:#dc2626; color:white;
-    font-size:9px; font-weight:700; padding:1px 5px;
-    border-radius:10px; margin-left:6px; letter-spacing:0.5px;
-    vertical-align:middle;
-  }
-</style>
-</head>
-<body>
-
-<!-- LOADING SCREEN -->
-<div id="loadingScreen">
-  <div class="loader-ring"></div>
-  <div class="loader-title"><span>LSPD</span> Terminal</div>
-  <div class="loader-sub">VERBINDUNG WIRD HERGESTELLT...</div>
-</div>
-
-<!-- NOTIFICATIONS -->
-<div id="notif" class="notification" style="display:none"></div>
-
-<!-- PAGE 1 - LOGIN -->
-<div id="page1" class="page active">
-  <div class="page1-corner tl"></div>
-  <div class="page1-corner tr"></div>
-  <div class="page1-corner bl"></div>
-  <div class="page1-corner br"></div>
-  <div class="p1-statusbar">
-    S8RYLIC
-    <div class="p1-signal">
-      <span></span><span></span><span></span><span></span><span></span>
-    </div>
-  </div>
-  <div class="login-box">
-    <div class="login-left">
-      <div class="badge-outer">
-        <div class="badge-scan"></div>
-        <div class="badge-inner-ring">
-          <div class="badge-arc-top">LOS SANTOS</div>
-          <div class="badge-stars">★ ★ ★ ★ ★</div>
-          <div class="badge-eagle-icon">🦅</div>
-          <div class="badge-shield">🛡️</div>
-          <div class="badge-lspd">LSPD</div>
-          <div class="badge-arc-bottom">POLICE DEPARTMENT</div>
-        </div>
-      </div>
-      <div class="login-time" id="loginTime"></div>
-    </div>
-    <div class="login-right">
-      <div class="login-title"><span class="lspd-word">LSPD</span> Personal Terminal</div>
-      <div class="login-subtitle-line">
-        <div class="login-subtitle-text">Secure Access System</div>
-      </div>
-      <div class="login-section-title">Login to Your Account</div>
-      <button class="btn-access" onclick="doLogin()">LOGIN</button>
-      <button class="btn-register-p1" onclick="openRegisterModal()">REGISTER NEW ACCOUNT</button>
-      <div class="login-error-msg" id="loginError">Du hast noch keinen Zugang zu dem LSPD Terminal</div>
-      <div class="fp-area">
-        <div class="fp-dot"></div>
-        <div class="fp-circle">👆</div>
-      </div>
-      <div class="login-footer-bar">LSPD – INTERNAL POLICE NETWORK – AUTHORIZED PERSONNEL ONLY ©2024</div>
-    </div>
-  </div>
-</div>
-
-<!-- REGISTER MODAL -->
-<div class="modal-overlay" id="registerModal">
-  <div class="modal">
-    <div class="modal-title">IC Infos</div>
-    <div class="modal-field"><div class="modal-label">ID *</div><input class="modal-input" autocomplete="off" id="reg-id" placeholder="Deine IC ID" type="text"></div>
-    <div class="modal-field"><div class="modal-label">Name *</div><input class="modal-input" autocomplete="off" id="reg-name" placeholder="IC Vorname" type="text"></div>
-    <div class="modal-field"><div class="modal-label">Nachname *</div><input class="modal-input" autocomplete="off" id="reg-nachname" placeholder="IC Nachname" type="text"></div>
-    <div class="modal-field"><div class="modal-label">Telefonnummer *</div><input class="modal-input" autocomplete="off" id="reg-tel" placeholder="IC Telefonnummer" type="text"></div>
-    <div class="modal-warning">⚠️ Alle angeben Daten sollen vom einem GTA5 RP Server sein, heißt alle angegeben Daten sind rein Fiktiv und Dürfen keine echten Daten sein aus dem echten leben sein!!!</div>
-    <div class="modal-check-row">
-      <input type="checkbox" id="reg-confirm">
-      <label for="reg-confirm" style="font-size:13px;cursor:pointer;">Ich habe die Warnung gelesen und bestätige, dass alle Angaben fiktiv sind.</label>
-    </div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('registerModal')">Abbrechen</button>
-      <button class="btn-modal green" onclick="doRegister()">Mit Google Registrieren ▶</button>
-    </div>
-  </div>
-</div>
-
-<!-- INNER PAGES WRAPPER -->
-<div id="innerPages" style="display:none;">
-
-<!-- NAV BAR -->
-<div class="nav-bar">
-  <div class="nav-header">
-    <div class="nav-badge-small">🦅</div>
-    <div>
-      <div class="nav-logo"><span>LSPD</span> Personal Terminal</div>
-      <div class="nav-logo-sub">Secure Internal Network</div>
-    </div>
-    <div class="nav-divider"></div>
-  </div>
-  <div class="nav-buttons">
-    <button class="nav-btn" id="nav-p2" onclick="showPage(2)">Officer Dashboard</button>
-    <button class="nav-btn" id="nav-p3" onclick="showPage(3)">Kleider Ordnung</button>
-    <button class="nav-btn" id="nav-p4" onclick="showPage(4)">Rangbefugnisse</button>
-    <button class="nav-btn" id="nav-p5" onclick="showPage(5)">Fahrzeug Ordnung</button>
-    <button class="nav-btn" id="nav-p6" onclick="showPage(6)">Sanktionskatalog</button>
-    <button class="nav-btn" id="nav-p7" onclick="showPage(7)">Mitarbeiter Register</button>
-    <button class="nav-btn" id="nav-p8" onclick="showPage(8)">Zugriffsanfrage</button>
-    <button class="nav-btn log-btn" id="nav-p20" onclick="showPage(20)" style="display:none;">🔒 Aktivitätslog</button>
-  </div>
-</div>
-
-<!-- PAGE 2 - DASHBOARD -->
-<div id="page2" class="page">
-  <hr class="dashboard-separator">
-  <div class="dashboard-grid" style="grid-template-columns:1fr 1fr 1fr;">
-    <div class="db-card">
-      <div class="db-card-header purple">Mitarbeiter Daten</div>
-      <div class="db-card-body" style="padding:0">
-        <div class="db-field"><div class="db-label">Name:</div><div class="db-value" id="db-name"></div></div>
-        <div class="db-field"><div class="db-label">ID:</div><div class="db-value" id="db-id"></div></div>
-        <div class="db-field"><div class="db-label">Telefonummer:</div><div class="db-value" id="db-tel"></div></div>
-        <div class="db-field"><div class="db-label">Dienstnummer:</div><div class="db-value" id="db-dn"></div></div>
-        <div class="db-field"><div class="db-label">Rang:</div><div class="db-value" id="db-rang"></div></div>
-        <div class="db-field"><div class="db-label">Abteilung:</div><div class="db-value" id="db-abt"></div></div>
-        <div class="db-field"><div class="db-label">ZweitAbteilung:</div><div class="db-value" id="db-zabt"></div></div>
-        <div class="db-field"><div class="db-label">Invite Datum:</div><div class="db-value" id="db-invite"></div></div>
-        <div class="db-field"><div class="db-label">Last RankUp:</div><div class="db-value" id="db-rankup"></div></div>
-        <div class="db-field"><div class="db-label">Urlaub:</div><div class="db-value" id="db-urlaub"></div></div>
-        <div class="db-field" style="border-bottom:1px solid rgba(30,58,95,0.25);"><div class="db-label">Strike:</div><div class="db-value" id="db-strike"></div></div>
-      </div>
-    </div>
-    <div class="db-card">
-      <div class="db-card-header orange">Ausbildungen</div>
-      <div class="db-card-body" style="padding:8px;">
-        <table style="width:100%;border-collapse:collapse;font-size:12px;">
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#b45309,#e07b20);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Für Rookie</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-GA">⬜</span></td><td class="ausb-lbl-cell">GA</td><td class="ausb-chk-cell"><span id="db-chk-EHK">⬜</span></td><td class="ausb-lbl-cell">EHK</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#b45309,#e07b20);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Für Officer</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-ES">⬜</span></td><td class="ausb-lbl-cell">ES</td><td class="ausb-chk-cell"><span id="db-chk-OP">⬜</span></td><td class="ausb-lbl-cell">OP</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#b45309,#e07b20);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Für Officer 2</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-OK">⬜</span></td><td class="ausb-lbl-cell">OK</td><td class="ausb-chk-cell"><span id="db-chk-FULA">⬜</span></td><td class="ausb-lbl-cell">FULA</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#b45309,#e07b20);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Für Officer First Class</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-TST">⬜</span></td><td class="ausb-lbl-cell">TST</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#b45309,#e07b20);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Für Supervising Officer</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-KS">⬜</span></td><td class="ausb-lbl-cell">KS</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#b45309,#e07b20);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Für Senior Supervisor</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-OKP">⬜</span></td><td class="ausb-lbl-cell">OK+</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#b45309,#e07b20);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Für Lead Supervisor</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-FT">⬜</span></td><td class="ausb-lbl-cell">FT</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#b45309,#e07b20);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Für Corporal</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-JP">⬜</span></td><td class="ausb-lbl-cell">JP</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#b45309,#e07b20);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Für Detective</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-ZP">⬜</span></td><td class="ausb-lbl-cell">ZP</td><td class="ausb-chk-cell"><span id="db-chk-AKS">⬜</span></td><td class="ausb-lbl-cell">AKS</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#b45309,#e07b20);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Für Sergeant</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-SP">⬜</span></td><td class="ausb-lbl-cell">SP</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-          <tr><th colspan="6" style="background:linear-gradient(135deg,#374151,#4b5563);padding:5px 8px;text-align:left;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(255,255,255,0.1);">Freiwillige Ausbildungen</th></tr>
-          <tr><td class="ausb-chk-cell"><span id="db-chk-TOW">⬜</span></td><td class="ausb-lbl-cell">TOW/BLZ</td><td class="ausb-chk-cell"><span id="db-chk-VHP">⬜</span></td><td class="ausb-lbl-cell">EL/VHP</td><td class="ausb-chk-cell"></td><td class="ausb-lbl-cell"></td></tr>
-        </table>
-      </div>
-    </div>
-    <div class="db-card">
-      <div class="db-card-header" style="background:linear-gradient(135deg,#991b1b,#dc2626);">Sonder Infos Für Sie</div>
-      <div class="db-card-body">
-        <div class="sonder-box" id="db-sonder"></div>
-        <div style="margin:16px 12px 8px 12px;display:flex;gap:10px;align-items:center;">
-          <input class="modal-input" autocomplete="off" id="db-beweis-sknr" placeholder="SK Nummer" style="width:120px;flex-shrink:0;">
-          <input class="modal-input" autocomplete="off" id="db-beweis-input" placeholder="Sanktion abgearbeitet (nur Link)" style="flex:1;">
-          <button class="tool-btn purple" onclick="sendBeweisLink()" style="white-space:nowrap;padding:9px 16px;">Senden</button>
-        </div>
-        <div id="db-beweis-status" style="font-size:12px;color:var(--text-dim);margin:0 12px 12px 12px;"></div>
-      </div>
-    </div>
-  </div>
-  <button class="btn-abmelden" onclick="doLogout()">⬛ Abmelden</button>
-</div>
-
-<!-- PAGE 3-5 WIP -->
-<div id="page3" class="page"><div class="wip-banner">WIRD BEARBEITET WEN SERVER DA IST!</div></div>
-<div id="page4" class="page"><div class="wip-banner">WIRD BEARBEITET WEN SERVER DA IST!</div></div>
-<div id="page5" class="page"><div class="wip-banner">WIRD BEARBEITET WEN SERVER DA IST!</div></div>
-
-<!-- PAGE 6 - SANKTIONSKATALOG -->
-<div id="page6" class="page">
-  <div class="toolbar">
-    <button class="tool-btn purple" onclick="clearAndOpenModal('addRuleModal')" title="Regel hinzufügen">＋</button>
-    <button class="tool-btn" onclick="openEditRuleModal()" title="Spalten umbenennen">✏️</button>
-    <div class="ml-auto"></div>
-    <button class="tool-btn red" onclick="deleteRuleBySearch()" title="Regel löschen">✕</button>
-    <button class="tool-btn" onclick="openEditRuleBySearch()" title="Regel bearbeiten">✏️</button>
-    <button class="tool-btn" onclick="searchRule()">🔍</button>
-    <input class="search-input" autocomplete="off" id="sk-search" placeholder="§ Durchsuchen" style="margin-left:4px;">
-    <button class="tool-btn" onclick="showPage(10)" title="Sanktionsarchiv">📁</button>
-  </div>
-  <div class="sk-container table-wrapper" id="sk-table-wrap">
-    <table class="sk-table" id="sk-table">
-      <thead>
-        <tr id="sk-header-row">
-          <th>§</th><th>Regeldefinition</th>
-          <th id="sk-h0">0</th><th id="sk-h1">1</th><th id="sk-h2">2</th><th id="sk-h3">3</th>
-          <th id="sk-h4">4</th><th id="sk-h5">5</th><th id="sk-h6">6</th><th id="sk-h7">7</th>
-          <th id="sk-h8">8</th><th id="sk-h9">9</th><th id="sk-h10">10</th><th id="sk-h11">11</th><th id="sk-h12">12</th>
-        </tr>
-      </thead>
-      <tbody id="sk-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Add Rule Modal -->
-<div class="modal-overlay" id="addRuleModal">
-  <div class="modal">
-    <div class="modal-title">Regel Hinzufügen</div>
-    <div class="modal-field"><div class="modal-label">§</div><input class="modal-input" autocomplete="off" id="ar-para" placeholder="§ Nummer"></div>
-    <div class="modal-field"><div class="modal-label">Regeldefinition</div><input class="modal-input" autocomplete="off" id="ar-def" placeholder="Regeldefinition"></div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-0">0</div><input class="modal-input" autocomplete="off" id="ar-0"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-1">1</div><input class="modal-input" autocomplete="off" id="ar-1"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-2">2</div><input class="modal-input" autocomplete="off" id="ar-2"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-3">3</div><input class="modal-input" autocomplete="off" id="ar-3"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-4">4</div><input class="modal-input" autocomplete="off" id="ar-4"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-5">5</div><input class="modal-input" autocomplete="off" id="ar-5"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-6">6</div><input class="modal-input" autocomplete="off" id="ar-6"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-7">7</div><input class="modal-input" autocomplete="off" id="ar-7"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-8">8</div><input class="modal-input" autocomplete="off" id="ar-8"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-9">9</div><input class="modal-input" autocomplete="off" id="ar-9"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-10">10</div><input class="modal-input" autocomplete="off" id="ar-10"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-11">11</div><input class="modal-input" autocomplete="off" id="ar-11"></div>
-      <div class="modal-field"><div class="modal-label" id="ar-lbl-12">12</div><input class="modal-input" autocomplete="off" id="ar-12"></div>
-    </div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('addRuleModal')">Abbrechen</button>
-      <button class="btn-modal green" onclick="addRule()">Hinzufügen</button>
-    </div>
-  </div>
-</div>
-
-<!-- Edit Header Modal -->
-<div class="modal-overlay" id="editHeaderModal">
-  <div class="modal">
-    <div class="modal-title">Spalten umbenennen</div>
-    <div id="ehm-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;"></div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('editHeaderModal')">Abbrechen</button>
-      <button class="btn-modal blue" onclick="saveHeader()">Speichern</button>
-    </div>
-  </div>
-</div>
-
-<!-- Edit Rule Modal -->
-<div class="modal-overlay" id="editRuleModal">
-  <div class="modal">
-    <div class="modal-title">Regel Bearbeiten</div>
-    <input type="hidden" id="er-idx">
-    <div class="modal-field"><div class="modal-label">§</div><input class="modal-input" autocomplete="off" id="er-para" placeholder="§ Nummer" readonly></div>
-    <div class="modal-field"><div class="modal-label">Regeldefinition</div><input class="modal-input" autocomplete="off" id="er-def"></div>
-    <div id="er-fields-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;">
-      <div class="modal-field"><div class="modal-label" id="er-lbl-0">0</div><input class="modal-input" autocomplete="off" id="er-0"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-1">1</div><input class="modal-input" autocomplete="off" id="er-1"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-2">2</div><input class="modal-input" autocomplete="off" id="er-2"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-3">3</div><input class="modal-input" autocomplete="off" id="er-3"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-4">4</div><input class="modal-input" autocomplete="off" id="er-4"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-5">5</div><input class="modal-input" autocomplete="off" id="er-5"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-6">6</div><input class="modal-input" autocomplete="off" id="er-6"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-7">7</div><input class="modal-input" autocomplete="off" id="er-7"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-8">8</div><input class="modal-input" autocomplete="off" id="er-8"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-9">9</div><input class="modal-input" autocomplete="off" id="er-9"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-10">10</div><input class="modal-input" autocomplete="off" id="er-10"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-11">11</div><input class="modal-input" autocomplete="off" id="er-11"></div>
-      <div class="modal-field"><div class="modal-label" id="er-lbl-12">12</div><input class="modal-input" autocomplete="off" id="er-12"></div>
-    </div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('editRuleModal')">Abbrechen</button>
-      <button class="btn-modal blue" onclick="saveRule()">Speichern</button>
-    </div>
-  </div>
-</div>
-
-<!-- PAGE 7 - MITARBEITER REGISTER -->
-<div id="page7" class="page">
-  <div class="toolbar">
-    <button class="tool-btn purple" onclick="openAddMitarbeiterModal()">＋</button>
-    <button class="tool-btn red" onclick="showPage(11)" title="Rang Voraussetzungen">＋</button>
-    <div class="ml-auto"></div>
-    <button class="tool-btn" onclick="openAusbildungModal()" title="Ausbildungen bearbeiten">📋</button>
-    <button class="tool-btn" onclick="openEditMitarbeiterModal()" title="Bearbeiten">✏️</button>
-    <button class="tool-btn" onclick="searchMitarbeiter()">🔍</button>
-    <input class="search-input" autocomplete="off" id="ma-search" placeholder="Mitarbeiter Suchen">
-    <button class="tool-btn" onclick="archiveMitarbeiter()" title="Archivieren">📦→</button>
-    <button class="tool-btn" onclick="showPage(9)" title="Archiv">📁</button>
-  </div>
-  <div class="table-wrapper">
-    <table class="data-table" id="ma-table">
-      <thead>
-        <tr>
-          <th>ID</th><th>DN</th><th>Name</th><th>Tel. Nr.</th><th>Rank</th>
-          <th class="sep-col"></th><th>Division</th><th class="sep-col"></th>
-          <th>Urlaub</th><th>Strike</th><th>Invite Datum</th><th>Last Rankup</th><th>UpRank</th>
-          <th>Abteilung</th><th>Zweitabteilung</th>
-          <th class="sep-col"></th>
-          <th>GA</th><th>EHK</th><th>ES</th><th>OP</th><th>OK</th><th>FULA</th>
-          <th>TST</th><th>KS</th><th>OK+</th><th>FT</th>
-          <th>JP</th><th>ZP</th><th>SP</th><th>VHP</th><th>TOW</th><th>AKS</th>
-        </tr>
-      </thead>
-      <tbody id="ma-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Add/Edit Mitarbeiter Modal -->
-<div class="modal-overlay" id="addMaModal">
-  <div class="modal" style="width:600px">
-    <div class="modal-title">Mitarbeiter Hinzufügen</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="modal-field"><div class="modal-label">ID *</div><input class="modal-input" autocomplete="off" id="ma-id" placeholder="ID"></div>
-      <div class="modal-field"><div class="modal-label">DN</div><input class="modal-input" autocomplete="off" id="ma-dn" placeholder="Dienstnummer"></div>
-      <div class="modal-field"><div class="modal-label">Name</div><input class="modal-input" autocomplete="off" id="ma-name" placeholder="Name"></div>
-      <div class="modal-field"><div class="modal-label">Tel. NR.</div><input class="modal-input" autocomplete="off" id="ma-tel" placeholder="Telefonnummer"></div>
-      <div class="modal-field">
-        <div class="modal-label">Rank</div>
-        <select class="modal-input" autocomplete="off" id="ma-rank" onchange="updateDivision()">
-          <option value="">-- Rang wählen --</option>
-          <option value="1">1 - Suspended</option><option value="2">2 - Cadet</option>
-          <option value="3">3 - TOW Officer</option><option value="4">4 - Rookie</option>
-          <option value="5">5 - Officer I</option><option value="6">6 - Officer II</option>
-          <option value="7">7 - Officer First Class</option><option value="8">8 - Supervising Officer</option>
-          <option value="9">9 - Senior Supervisor</option><option value="10">10 - Lead Supervisor</option>
-          <option value="11">11 - Corporal</option><option value="12">12 - Detective</option>
-          <option value="13">13 - Sergeant</option><option value="14">14 - Lieutenant</option>
-          <option value="15">15 - Captain</option><option value="16">16 - Commander</option>
-          <option value="17">17 - Special Police Officer</option><option value="18">18 - Press Associator</option>
-          <option value="19">19 - Enforcement Supervisor</option><option value="20">20 - S.W.A.T. Captain</option>
-          <option value="21">21 - HR Coordinator</option><option value="22">22 - IU Investigator</option>
-          <option value="23">23 - Police Inspector</option><option value="24">24 - Police Commander</option>
-          <option value="25">25 - Deputy Chief of Department</option><option value="26">26 - Chief of Department</option>
-          <option value="27">27 - Advising Chief of Police</option><option value="28">28 - Assistant Chief of Police</option>
-          <option value="29">29 - Deputy Chief of Police</option><option value="30">30 - Chief of Police</option>
-        </select>
-      </div>
-      <div class="modal-field"><div class="modal-label">Division (auto)</div><input class="modal-input" autocomplete="off" id="ma-div" readonly placeholder="Automatisch"></div>
-      <div class="modal-field"><div class="modal-label">Invite Datum</div><input class="modal-input" autocomplete="off" id="ma-invite" type="date"></div>
-      <div class="modal-field"><div class="modal-label">Last RankUp</div><input class="modal-input" autocomplete="off" id="ma-rankup" type="date"></div>
-      <div class="modal-field"><div class="modal-label">Abteilung</div><input class="modal-input" autocomplete="off" id="ma-abt" placeholder="Abteilung"></div>
-      <div class="modal-field"><div class="modal-label">Zweit Abteilung</div><input class="modal-input" autocomplete="off" id="ma-zabt" placeholder="Zweit Abteilung"></div>
-      <div class="modal-field">
-        <div class="modal-label">Urlaub (max 3)</div>
-        <div class="spinner-row"><button class="spinner-btn" onclick="spinChange('ma-urlaub',-1)">−</button><span class="spinner-val" id="ma-urlaub">0</span><button class="spinner-btn" onclick="spinChange('ma-urlaub',1)">+</button></div>
-      </div>
-      <div class="modal-field">
-        <div class="modal-label">Strike (max 3)</div>
-        <div class="spinner-row"><button class="spinner-btn" onclick="spinChange('ma-strike',-1)">−</button><span class="spinner-val" id="ma-strike">0</span><button class="spinner-btn" onclick="spinChange('ma-strike',1)">+</button></div>
-      </div>
-    </div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('addMaModal')">Abbrechen</button>
-      <button class="btn-modal green" id="addMaSubmitBtn" onclick="addMitarbeiter()">Hinzufügen</button>
-    </div>
-  </div>
-</div>
-
-<!-- Ausbildung Modal -->
-<div class="modal-overlay" id="ausbildungModal">
-  <div class="modal" style="width:500px">
-    <div class="modal-title">Ausbildungen Bearbeiten</div>
-    <div id="ausb-ma-name" style="color:var(--cyan);margin-bottom:12px;font-size:14px;"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-GA"> GA</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-EHK"> EHK</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-ES"> ES</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-OP"> OP</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-OK"> OK</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-FULA"> FULA</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-TST"> TST</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-KS"> KS</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-OKP"> OK+</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-FT"> FT</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-JP"> JP</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-ZP"> ZP</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-VHP"> VHP</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-SP"> SP</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-TOW"> TOW</label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="ausb-AKS"> AKS</label>
-    </div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('ausbildungModal')">Abbrechen</button>
-      <button class="btn-modal blue" onclick="saveAusbildung()">Speichern</button>
-    </div>
-  </div>
-</div>
-
-<!-- PAGE 8 - ZUGRIFFSANFRAGE -->
-<div id="page8" class="page">
-  <div class="toolbar">
-    <button class="tool-btn purple" onclick="clearAndOpenModal('addZugriffModal')">＋</button>
-    <div class="ml-auto"></div>
-    <button class="tool-btn red" onclick="deleteZugriff()">✕</button>
-    <button class="tool-btn" onclick="openEditZugriffModal()">✏️</button>
-    <button class="tool-btn" onclick="searchZugriff()">🔍</button>
-    <input class="search-input" autocomplete="off" id="zug-search" placeholder="Zugriff Durchsuchen">
-  </div>
-  <div class="table-wrapper">
-    <table class="data-table" id="zug-table">
-      <thead>
-        <tr>
-          <th>ID</th><th>Name</th><th>Nachname</th><th>Telefonnummer</th>
-          <th>Email</th><th>Rechte</th><th>Status</th><th>Freigeben</th>
-        </tr>
-      </thead>
-      <tbody id="zug-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Add Zugriff Modal -->
-<div class="modal-overlay" id="addZugriffModal">
-  <div class="modal">
-    <div class="modal-title">Zugriff Hinzufügen</div>
-    <div class="modal-field"><div class="modal-label">ID *</div><input class="modal-input" autocomplete="off" id="az-id" placeholder="ID"></div>
-    <div class="modal-field"><div class="modal-label">Name</div><input class="modal-input" autocomplete="off" id="az-name" placeholder="Name"></div>
-    <div class="modal-field"><div class="modal-label">Nachname</div><input class="modal-input" autocomplete="off" id="az-nachname" placeholder="Nachname"></div>
-    <div class="modal-field"><div class="modal-label">Telefonnummer</div><input class="modal-input" autocomplete="off" id="az-tel" placeholder="Telefonnummer"></div>
-    <div class="modal-field"><div class="modal-label">Email</div><input class="modal-input" autocomplete="off" id="az-email" placeholder="Email" type="email"></div>
-    <div class="modal-field">
-      <div class="modal-label">Rang (Rechte)</div>
-      <select class="modal-input" autocomplete="off" id="az-rang">
-        <option value="1">Mitarbeiter</option><option value="6">PA</option>
-        <option value="7">IU</option><option value="8">IU Leitung</option>
-        <option value="9">HR</option><option value="10">HR Leitung</option>
-        <option value="Admin">Admin</option><option value="Leaderschaft">Leaderschaft</option>
-        <option value="Ersteller">Ersteller</option>
-      </select>
-    </div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('addZugriffModal')">Abbrechen</button>
-      <button class="btn-modal green" onclick="addZugriff()">Hinzufügen</button>
-    </div>
-  </div>
-</div>
-
-<!-- Edit Zugriff Modal -->
-<div class="modal-overlay" id="editZugriffModal">
-  <div class="modal">
-    <div class="modal-title">Zugriff Bearbeiten</div>
-    <input type="hidden" id="ez-idx">
-    <div class="modal-field"><div class="modal-label">ID</div><input class="modal-input" autocomplete="off" id="ez-id" placeholder="ID" readonly></div>
-    <div class="modal-field"><div class="modal-label">Name</div><input class="modal-input" autocomplete="off" id="ez-name" placeholder="Name"></div>
-    <div class="modal-field"><div class="modal-label">Nachname</div><input class="modal-input" autocomplete="off" id="ez-nachname" placeholder="Nachname"></div>
-    <div class="modal-field"><div class="modal-label">Telefonnummer</div><input class="modal-input" autocomplete="off" id="ez-tel" placeholder="Telefonnummer"></div>
-    <div class="modal-field"><div class="modal-label">Email</div><input class="modal-input" autocomplete="off" id="ez-email" placeholder="Email"></div>
-    <div class="modal-field">
-      <div class="modal-label">Rang (Rechte)</div>
-      <select class="modal-input" autocomplete="off" id="ez-rang">
-        <option value="1">Mitarbeiter</option><option value="6">PA</option>
-        <option value="7">IU</option><option value="8">IU Leitung</option>
-        <option value="9">HR</option><option value="10">HR Leitung</option>
-        <option value="Admin">Admin</option><option value="Leaderschaft">Leaderschaft</option>
-        <option value="Ersteller">Ersteller</option>
-      </select>
-    </div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('editZugriffModal')">Abbrechen</button>
-      <button class="btn-modal blue" onclick="saveZugriff()">Speichern</button>
-    </div>
-  </div>
-</div>
-
-<!-- Delete Confirm Modal -->
-<div class="modal-overlay" id="deleteConfirmModal">
-  <div class="modal red">
-    <div class="modal-title" id="del-title">Wirklich löschen?</div>
-    <p id="del-msg" style="color:#fca5a5;font-size:14px;margin-bottom:20px;"></p>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('deleteConfirmModal');document.getElementById('del-confirm-btn').textContent='Ja, Löschen';document.getElementById('del-title').textContent='Wirklich löschen?';">Abbrechen</button>
-      <button class="btn-modal red" id="del-confirm-btn" onclick="confirmDelete()">Ja, Löschen</button>
-    </div>
-  </div>
-</div>
-
-<!-- PAGE 9 - MITARBEITER ARCHIV -->
-<div id="page9" class="page">
-  <div class="toolbar">
-    <button class="tool-btn back" onclick="showPage(7)">← BACK</button>
-    <div style="flex:1;text-align:center;"><span style="font-size:14px;font-weight:700;color:var(--text-dim);">Mitarbeiter Archiv</span></div>
-    <button class="tool-btn red" onclick="openEntlassungModal()" title="Alle ins Entlassungsarchiv verschieben">📦→</button>
-    <button class="tool-btn" onclick="showPage(19)" title="Entlassungsarchiv">📁</button>
-    <button class="tool-btn red" onclick="deleteArchived()">✕</button>
-    <button class="tool-btn" onclick="searchArchive()">🔍</button>
-    <input class="search-input" autocomplete="off" id="arch-search" placeholder="Archiv Durchsuchen">
-  </div>
-  <div class="table-wrapper">
-    <table class="data-table" id="arch-table">
-      <thead>
-        <tr>
-          <th>ID</th><th>DN</th><th>Name</th><th>Tel. Nr.</th><th>Rank</th>
-          <th class="sep-col"></th><th>Division</th><th class="sep-col"></th>
-          <th>Urlaub</th><th>Strike</th><th>Invite Datum</th><th>Last Rankup</th><th>UpRank</th>
-          <th>Abteilung</th><th>Zweitabteilung</th><th class="sep-col"></th>
-          <th>GA</th><th>EHK</th><th>ES</th><th>OP</th><th>OK</th><th>FULA</th>
-          <th>TST</th><th>KS</th><th>OK+</th><th>FT</th>
-          <th>JP</th><th>ZP</th><th>SP</th><th>VHP</th><th>TOW</th><th>AKS</th>
-        </tr>
-      </thead>
-      <tbody id="arch-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- PAGE 10 - SANKTIONEN -->
-<div id="page10" class="page">
-  <div class="toolbar">
-    <button class="tool-btn back" onclick="showPage(6)">← BACK</button>
-    <div style="flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text-dim);">Mitarbeiter Sanktionen</div>
-    <button class="tool-btn red" onclick="deleteSanktion()">✕</button>
-    <button class="tool-btn purple" onclick="clearAndOpenModal('addSanktionModal')">＋</button>
-    <button class="tool-btn" onclick="searchSanktion()">🔍</button>
-    <input class="search-input" autocomplete="off" id="sank-search" placeholder="Sanktion Suchen">
-    <button class="tool-btn" onclick="archiveSanktion()" title="Ins Archiv verschieben">📦→</button>
-    <button class="tool-btn" onclick="showPage(12)" title="Archiv">📁</button>
-  </div>
-  <div class="table-wrapper">
-    <table class="data-table">
-      <thead><tr><th>SK</th><th>ID</th><th>Name</th><th>Grund der Sanktion</th><th>Strafe</th><th>Zur Sanktion</th></tr></thead>
-      <tbody id="sank-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Add Sanktion Modal -->
-<div class="modal-overlay" id="addSanktionModal">
-  <div class="modal">
-    <div class="modal-title">Sanktion Erstellen</div>
-    <div class="modal-field"><div class="modal-label">ID</div><input class="modal-input" autocomplete="off" id="sank-id" placeholder="Mitarbeiter ID" oninput="autoGenSkNr()"></div>
-    <div class="modal-field">
-      <div class="modal-label">SK NR <span style="color:var(--cyan);font-size:10px;">(automatisch)</span></div>
-      <input class="modal-input" autocomplete="off" id="sank-nr" placeholder="Wird automatisch generiert..." readonly style="opacity:0.6;cursor:not-allowed;background:rgba(0,0,0,0.3);">
-    </div>
-    <div class="modal-field"><div class="modal-label">Name</div><input class="modal-input" autocomplete="off" id="sank-name" placeholder="Name"></div>
-    <div class="modal-field"><div class="modal-label">Grund der Sanktion</div><input class="modal-input" autocomplete="off" id="sank-grund" placeholder="Grund"></div>
-    <div class="modal-field"><div class="modal-label">Strafe</div><input class="modal-input" autocomplete="off" id="sank-strafe" placeholder="Strafe"></div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('addSanktionModal')">Abbrechen</button>
-      <button class="btn-modal green" onclick="addSanktion()">Erstellen</button>
-    </div>
-  </div>
-</div>
-
-<!-- PAGE 11 - RANG VORAUSSETZUNGEN -->
-<div id="page11" class="page" style="position:fixed;inset:0;z-index:200;background:var(--bg-dark);display:none;flex-direction:column;">
-  <div style="padding:8px 12px;background:var(--bg-panel);border-bottom:1px solid var(--border);flex-shrink:0;">
-    <button class="tool-btn back" onclick="showPage(7)">← BACK</button>
-  </div>
-  <div class="table-wrapper" style="flex:1;overflow-y:auto;">
-    <table class="data-table" style="width:100%;">
-      <thead><tr><th>ID</th><th>Name</th><th>Alter Rang</th><th>Neuer Rang</th><th>Sanktion</th></tr></thead>
-      <tbody id="p11-tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<!-- PAGE 12 - SANKTIONS ARCHIV -->
-<div id="page12" class="page">
-  <div class="toolbar">
-    <button class="tool-btn back" onclick="showPage(10)">← BACK</button>
-    <div style="flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text-dim);">Sanktions Archiv</div>
-    <button class="tool-btn red" onclick="deleteSanktionArchiv()">✕</button>
-    <button class="tool-btn" onclick="searchSanktionArchiv()">🔍</button>
-    <input class="search-input" autocomplete="off" id="sank-archiv-search" placeholder="SK Suchen">
-  </div>
-  <div id="sank-archiv-container" style="padding:12px;"></div>
-</div>
-
-<!-- PAGE 19 - ENTLASSUNGSARCHIV -->
-<div id="page19" class="page">
-  <div class="toolbar">
-    <button class="tool-btn back" onclick="showPage(9)">← BACK</button>
-    <div style="flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text-dim);">Entlassungsarchiv</div>
-    <button class="tool-btn red" onclick="deleteEntlassungsgruppe()">✕</button>
-    <button class="tool-btn" onclick="searchEntlassung()">🔍</button>
-    <input class="search-input" autocomplete="off" id="entlass-search" placeholder="Gruppe suchen...">
-    <button class="tool-btn purple" onclick="showPage(9)">← Zurück</button>
-  </div>
-  <div id="entlass-container" style="padding:12px;"></div>
-</div>
-
-<!-- Entlassung Modal -->
-<div class="modal-overlay" id="entlassungModal">
-  <div class="modal">
-    <div class="modal-title">📦 Ins Entlassungsarchiv verschieben</div>
-    <p style="color:var(--text-dim);font-size:12px;margin-bottom:16px;">Alle <span id="entlass-anzahl" style="color:var(--cyan);font-weight:700;"></span> Mitarbeiter im Archiv werden als Gruppe ins Entlassungsarchiv verschoben.</p>
-    <div class="modal-field">
-      <div class="modal-label">Gruppenname *</div>
-      <input class="modal-input" autocomplete="off" id="entlass-name" placeholder="z.B. Entlassung Welle 1">
-    </div>
-    <div class="modal-field">
-      <div class="modal-label">Zeitraum Von *</div>
-      <input class="modal-input" id="entlass-von" type="date">
-    </div>
-    <div class="modal-field">
-      <div class="modal-label">Zeitraum Bis *</div>
-      <input class="modal-input" id="entlass-bis" type="date">
-    </div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('entlassungModal')">Abbrechen</button>
-      <button class="btn-modal green" onclick="doEntlassung()">Weiter ▶</button>
-    </div>
-  </div>
-</div>
-<div id="page20" class="page">
-  <div class="log-page-header">
-    <div>
-      <div class="log-title">🔒 <span>Aktivitätslog</span></div>
-      <div style="font-size:11px;color:var(--text-muted);letter-spacing:2px;margin-top:4px;">VOLLSTÄNDIGES AUDIT-PROTOKOLL — NUR FÜR ERSTELLER</div>
-    </div>
-    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
-      <button class="tool-btn back" onclick="showPage(previousPage)">← Zurück</button>
-      <button class="log-clear-btn" onclick="clearAllLogs()">🗑 Logs löschen</button>
-      <button class="tool-btn" onclick="loadLogs()">↻ Aktualisieren</button>
-    </div>
-  </div>
-  <div class="log-stats-bar">
-    <div class="log-stat"><div class="log-stat-val" id="log-stat-total">0</div><div class="log-stat-lbl">Gesamt</div></div>
-    <div class="log-stat"><div class="log-stat-val" id="log-stat-create" style="color:#86efac;">0</div><div class="log-stat-lbl">Erstellt</div></div>
-    <div class="log-stat"><div class="log-stat-val" id="log-stat-update" style="color:#93c5fd;">0</div><div class="log-stat-lbl">Bearbeitet</div></div>
-    <div class="log-stat"><div class="log-stat-val" id="log-stat-delete" style="color:#fca5a5;">0</div><div class="log-stat-lbl">Gelöscht</div></div>
-    <div class="log-stat"><div class="log-stat-val" id="log-stat-freigabe" style="color:#fde047;">0</div><div class="log-stat-lbl">Freigaben</div></div>
-  </div>
-  <div class="log-filters">
-    <button class="log-filter-btn all active" onclick="filterLogs('all',this)">Alle</button>
-    <button class="log-filter-btn" onclick="filterLogs('mitarbeiter',this)">👤 Mitarbeiter</button>
-    <button class="log-filter-btn" onclick="filterLogs('zugriff',this)">🔑 Zugriff</button>
-    <button class="log-filter-btn" onclick="filterLogs('sanktion',this)">⚖️ Sanktionen</button>
-    <button class="log-filter-btn" onclick="filterLogs('sk',this)">📋 SK Regeln</button>
-    <div style="margin-left:auto;">
-      <input class="search-input" id="log-search" placeholder="Log durchsuchen..." oninput="searchLogs()" style="width:220px;">
-    </div>
-  </div>
-  <div class="log-table-wrap">
-    <table class="log-table">
-      <thead>
-        <tr>
-          <th style="width:160px;">Zeitpunkt</th>
-          <th style="width:160px;">Benutzer</th>
-          <th style="width:70px;">ID</th>
-          <th style="width:120px;">Name</th>
-          <th style="width:100px;">Kategorie</th>
-          <th style="width:100px;">Aktion</th>
-          <th>Details</th>
-          <th style="width:80px;">Ziel-ID</th>
-        </tr>
-      </thead>
-      <tbody id="log-tbody"></tbody>
-    </table>
-  </div>
-  <div class="log-pagination" id="log-pagination"></div>
-</div>
-
-</div><!-- end innerPages -->
-
-<!-- SANKTION DETAIL PAGES (dynamisch) -->
-<div id="sanktionPages"></div>
-
-<!-- FIREBASE & APP LOGIC -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import {
-  getFirestore, doc, setDoc, getDoc, getDocs, collection,
-  addDoc, updateDoc, deleteDoc, query, where, orderBy, limit, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDwBt0lLCcs-yHkW2wMQLxsgDx3mMCMbbA",
-  authDomain: "test-projekt-212da.firebaseapp.com",
-  projectId: "test-projekt-212da",
-  storageBucket: "test-projekt-212da.firebasestorage.app",
-  messagingSenderId: "806742048953",
-  appId: "1:806742048953:web:51f8a99be1647b73d25b68",
-  measurementId: "G-6R20V4M1TD"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-const provider = new GoogleAuthProvider();
-provider.setCustomParameters({ prompt: 'select_account' });
-
-// ===== STATE =====
-let currentUser = null;
-let currentPage = 1;
-window.previousPage = 2;
-let mitarbeiterData = [];
-let archivData = [];
-let zugriffData = [];
-let sanktionData = [];
-let sanktionArchivData = [];
-let skRules = [];
-let skHeaders = ['0','1','2','3','4','5','6','7','8','9','10','11','12'];
-let deleteCallback = null;
-let editingMaId = null;
-let ausbildungTargetId = null;
-let currentRang = '1';
-let currentRangNum = 1;
-let allLogs = [];
-let filteredLogs = [];
-let logCurrentFilter = 'all';
-let logCurrentPage = 1;
-const LOG_PAGE_SIZE = 50;
-
-// ===== TIME =====
-function updateTime() {
-  const n = new Date();
-  const t = `${n.getHours().toString().padStart(2,'0')}:${n.getMinutes().toString().padStart(2,'0')} | ${n.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}).toUpperCase()}`;
-  const el = document.getElementById('loginTime');
-  if (el) el.textContent = t;
-}
-updateTime(); setInterval(updateTime, 10000);
-
-// ===== NOTIFICATIONS =====
-window.showNotif = function(msg, type='success') {
-  const el = document.getElementById('notif');
-  el.textContent = msg; el.className = `notification ${type}`; el.style.display='block';
-  setTimeout(() => el.style.display='none', 4000);
-}
-
-// ===== AKTIVITÄTSLOG SYSTEM =====
-async function writeLog(category, action, details, targetId='') {
-  // Nur wenn User eingeloggt ist
-  if (!currentUser) return;
-  try {
-    const logEntry = {
-      timestamp: serverTimestamp(),
-      timestampISO: new Date().toISOString(),
-      userEmail: currentUser.email || '',
-      userUID: currentUser.uid || '',
-      userName: currentUser.displayName || currentUser.email || '',
-      category,   // 'mitarbeiter' | 'zugriff' | 'sanktion' | 'sk'
-      action,     // 'create' | 'update' | 'delete' | 'freigabe' | 'archiv'
-      details,
-      targetId: String(targetId)
-    };
-    await addDoc(collection(db, 'aktivitaetslog'), logEntry);
-  } catch(e) {
-    console.warn('[LOG] Schreiben fehlgeschlagen:', e.message);
-    // Nicht kritisch - App läuft weiter
-  }
-}
-
-async function loadLogs() {
-  try {
-    const snap = await getDocs(collection(db, 'aktivitaetslog'));
-    allLogs = snap.docs.map(d => ({...d.data(), _id: d.id}));
-    // Sort by timestampISO descending
-    allLogs.sort((a,b) => {
-      const ta = a.timestampISO || '';
-      const tb = b.timestampISO || '';
-      return tb.localeCompare(ta);
-    });
-    applyLogFilter(logCurrentFilter);
-    updateLogStats();
-  } catch(e) {
-    console.warn('[LOG] Laden fehlgeschlagen:', e.message);
-    showNotif('Log laden fehlgeschlagen: ' + e.message, 'error');
-  }
-}
-
-function updateLogStats() {
-  document.getElementById('log-stat-total').textContent = allLogs.length;
-  document.getElementById('log-stat-create').textContent = allLogs.filter(l=>l.action==='create').length;
-  document.getElementById('log-stat-update').textContent = allLogs.filter(l=>l.action==='update').length;
-  document.getElementById('log-stat-delete').textContent = allLogs.filter(l=>l.action==='delete').length;
-  document.getElementById('log-stat-freigabe').textContent = allLogs.filter(l=>l.action==='freigabe'||l.action==='archiv').length;
-}
-
-function applyLogFilter(filter) {
-  logCurrentFilter = filter;
-  logCurrentPage = 1;
-  if (filter === 'all') {
-    filteredLogs = [...allLogs];
-  } else {
-    filteredLogs = allLogs.filter(l => l.category === filter);
-  }
-  const searchVal = document.getElementById('log-search')?.value.trim().toLowerCase() || '';
-  if (searchVal) {
-    filteredLogs = filteredLogs.filter(l =>
-      (l.details||'').toLowerCase().includes(searchVal) ||
-      (l.userEmail||'').toLowerCase().includes(searchVal) ||
-      (l.targetId||'').toLowerCase().includes(searchVal) ||
-      (l.action||'').toLowerCase().includes(searchVal)
-    );
-  }
-  renderLogs();
-}
-
-function renderLogs() {
-  const tbody = document.getElementById('log-tbody');
-  if (!tbody) return;
-
-  const start = (logCurrentPage - 1) * LOG_PAGE_SIZE;
-  const pageLogs = filteredLogs.slice(start, start + LOG_PAGE_SIZE);
-
-  if (pageLogs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="log-empty"><div class="log-empty-icon">📋</div><div>Keine Einträge gefunden</div></div></td></tr>`;
-    renderLogPagination();
-    return;
-  }
-
-  const actionClass = {
-    create: 'log-action-create', update: 'log-action-update',
-    delete: 'log-action-delete', freigabe: 'log-action-freigabe',
-    archiv: 'log-action-archiv'
-  };
-  const actionLabel = {
-    create: 'ERSTELLT', update: 'BEARBEITET',
-    delete: 'GELÖSCHT', freigabe: 'FREIGABE',
-    archiv: 'ARCHIVIERT'
-  };
-  const catClass = {
-    mitarbeiter: 'log-cat-mitarbeiter', zugriff: 'log-cat-zugriff',
-    sanktion: 'log-cat-sanktion', sk: 'log-cat-sk'
-  };
-  const catLabel = {
-    mitarbeiter: '👤 Mitarbeiter', zugriff: '🔑 Zugriff',
-    sanktion: '⚖️ Sanktion', sk: '📋 SK Regel'
-  };
-
-  tbody.innerHTML = pageLogs.map(log => {
-    const ts = log.timestampISO ? new Date(log.timestampISO).toLocaleString('de-DE') : '–';
-    const ac = actionClass[log.action] || 'log-action-update';
-    const al = actionLabel[log.action] || log.action?.toUpperCase() || '?';
-    const cc = catClass[log.category] || '';
-    const cl = catLabel[log.category] || log.category || '?';
-
-    // ID und Name aus Mitarbeiterregister holen via userUID → zugriff → mitarbeiter
-    let maId = '–';
-    let maName = '–';
-    if (log.userUID) {
-      const zug = zugriffData.find(z => z.uid === log.userUID);
-      if (zug && zug.id) {
-        maId = zug.id;
-        const ma = mitarbeiterData.find(m => m.id === zug.id);
-        if (ma && ma.name) maName = ma.name;
-      }
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================
+    // HILFSFUNKTIONEN - AUTHENTIFIZIERUNG
+    // =========================================================
+
+    function isLoggedIn() {
+      return request.auth != null;
     }
 
-    return `<tr>
-      <td style="font-size:11px;color:var(--text-dim);white-space:nowrap;">${ts}</td>
-      <td style="font-size:11px;">${log.userEmail||log.userName||'–'}</td>
-      <td style="font-family:'Orbitron',monospace;font-size:10px;color:var(--cyan);text-align:center;">${maId}</td>
-      <td style="font-size:11px;font-weight:600;">${maName}</td>
-      <td><span class="log-category-badge ${cc}">${cl}</span></td>
-      <td><span class="log-action-badge ${ac}">${al}</span></td>
-      <td style="text-align:left;max-width:300px;word-break:break-word;">${log.details||'–'}</td>
-      <td style="font-family:'Orbitron',monospace;font-size:10px;color:var(--cyan);">${log.targetId||'–'}</td>
-    </tr>`;
-  }).join('');
-
-  renderLogPagination();
-}
-
-function renderLogPagination() {
-  const container = document.getElementById('log-pagination');
-  if (!container) return;
-  const totalPages = Math.ceil(filteredLogs.length / LOG_PAGE_SIZE);
-  if (totalPages <= 1) { container.innerHTML = `<span class="log-page-info">${filteredLogs.length} Einträge</span>`; return; }
-
-  let html = `<span class="log-page-info">${filteredLogs.length} Einträge | Seite ${logCurrentPage}/${totalPages}</span>`;
-  html += `<button class="log-page-btn" onclick="logGoPage(${logCurrentPage-1})" ${logCurrentPage<=1?'disabled':''}>◀</button>`;
-  for (let p = Math.max(1,logCurrentPage-2); p <= Math.min(totalPages,logCurrentPage+2); p++) {
-    html += `<button class="log-page-btn ${p===logCurrentPage?'active':''}" onclick="logGoPage(${p})">${p}</button>`;
-  }
-  html += `<button class="log-page-btn" onclick="logGoPage(${logCurrentPage+1})" ${logCurrentPage>=totalPages?'disabled':''}>▶</button>`;
-  container.innerHTML = html;
-}
-
-window.logGoPage = function(p) {
-  const totalPages = Math.ceil(filteredLogs.length / LOG_PAGE_SIZE);
-  if (p < 1 || p > totalPages) return;
-  logCurrentPage = p;
-  renderLogs();
-  document.querySelector('.log-table-wrap')?.scrollTo(0,0);
-}
-
-window.filterLogs = function(filter, btn) {
-  document.querySelectorAll('.log-filter-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  applyLogFilter(filter);
-}
-
-window.searchLogs = function() {
-  applyLogFilter(logCurrentFilter);
-}
-
-window.clearAllLogs = function() {
-  document.getElementById('del-title').textContent = 'Alle Logs löschen?';
-  document.getElementById('del-msg').textContent = `Wirklich alle ${allLogs.length} Log-Einträge dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.`;
-  deleteCallback = async () => {
-    for (const log of allLogs) {
-      try { await deleteDoc(doc(db,'aktivitaetslog',log._id)); } catch(e) {}
-    }
-    allLogs = []; filteredLogs = [];
-    renderLogs(); updateLogStats();
-    showNotif('Alle Logs gelöscht','success');
-  };
-  openModal('deleteConfirmModal');
-}
-
-// ===== MODALS =====
-window.openModal = function(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.querySelectorAll('input').forEach(inp => {
-    if (inp.type === 'hidden') return;
-    if (inp.type === 'checkbox') inp.checked = false;
-    else inp.value = '';
-  });
-  el.querySelectorAll('select').forEach(sel => sel.selectedIndex = 0);
-  el.querySelectorAll('textarea').forEach(ta => ta.value = '');
-  el.querySelectorAll('.spinner-val').forEach(sp => sp.textContent = '0');
-  el.classList.add('open');
-}
-window.clearAndOpenModal = function(id) { openModal(id); }
-window.closeModal = function(id) { document.getElementById(id).classList.remove('open'); }
-
-// ===== PAGES =====
-const HIDE_NAV_PAGES = [9,10,11,12,19,20];
-
-window.showPage = function(n) {
-  // Vorherige Seite merken (nur wenn nicht schon auf Seite 20)
-  if (currentPage !== 20 && n === 20) window.previousPage = currentPage;
-
-  document.querySelectorAll('#innerPages .page').forEach(p => p.classList.remove('active'));
-  const el = document.getElementById('page'+n);
-  if (el) el.classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const nb = document.getElementById('nav-p'+n);
-  if (nb) nb.classList.add('active');
-  currentPage = n;
-
-  const navButtons = document.querySelector('.nav-buttons');
-  if (navButtons) navButtons.style.display = HIDE_NAV_PAGES.includes(n) ? 'none' : 'flex';
-
-  const p11 = document.getElementById('page11');
-  if (p11) p11.style.display = (n === 11) ? 'flex' : 'none';
-
-  if ((n >= 2 && n <= 10) || n === 11 || n === 12 || n === 19 || n === 20) {
-    try { localStorage.setItem('lspd_page', n); } catch(e) {}
-  }
-  window.scrollTo(0, 0);
-  if (n === 7) renderMitarbeiter();
-  if (n === 8) renderZugriff();
-  if (n === 9) renderArchiv();
-  if (n === 10) { renderSanktionen(); setTimeout(checkAllSanktionNewMessages, 300); }
-  if (n === 6) { if (skRules.length === 0) loadSKRules().then(renderSKRules); else renderSKRules(); }
-  if (n === 11) renderPage11();
-  if (n === 12) loadSanktionArchiv();
-  if (n === 19) loadEntlassungsarchiv();
-  if (n === 20) loadLogs();
-  if (currentRang) setTimeout(() => applyRangPermissions(currentRang), 60);
-}
-
-// ===== AUTH =====
-let isRegistering = false;
-
-function hideLoader() { document.getElementById('loadingScreen').classList.add('hidden'); }
-
-onAuthStateChanged(auth, async (user) => {
-  if (isRegistering) return;
-  if (user) {
-    currentUser = user;
-    let zugData = null;
-    let zugDocRef = null;
-
-    // WEG 1: Per UID
-    try {
-      const snap = await getDoc(doc(db, 'zugriff', user.uid));
-      if (snap.exists()) { zugData = snap.data(); zugDocRef = user.uid; }
-    } catch(e) { console.warn('[AUTH] UID-Suche:', e.code); }
-
-    // WEG 2: Per Email
-    if (!zugData) {
-      try {
-        const q = query(collection(db,'zugriff'), where('email','==',user.email));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          zugData = snap.docs[0].data();
-          zugDocRef = snap.docs[0].id;
-          // UID-Verknüpfung erstellen
-          try {
-            await setDoc(doc(db,'zugriff',user.uid), {...zugData, uid: user.uid});
-            if (zugDocRef !== user.uid) await deleteDoc(doc(db,'zugriff',zugDocRef));
-          } catch(linkErr) { console.warn('[AUTH] UID-Link:', linkErr.code); }
-        }
-      } catch(e) { console.warn('[AUTH] Email-Suche:', e.code); }
+    // Hardcoded Ersteller-Email (höchste Berechtigung)
+    function isHardcodedAdmin() {
+      return request.auth != null &&
+             request.auth.token.email == 'h.vonwanze@gmail.com';
     }
 
-    // WEG 3: Per anfragen
-    if (!zugData) {
-      try {
-        const anfSnap = await getDoc(doc(db,'anfragen',user.uid));
-        if (anfSnap.exists()) {
-          const anfData = anfSnap.data();
-          if (anfData.freigegeben === true) {
-            const neuerEintrag = {...anfData, uid: user.uid, rang: anfData.rang||'1', freigegeben: true};
-            try {
-              await setDoc(doc(db,'zugriff',user.uid), neuerEintrag);
-              await deleteDoc(doc(db,'anfragen',user.uid));
-              zugData = neuerEintrag;
-            } catch(e) { zugData = anfData; }
-          } else {
-            zugData = {...anfData, freigegeben: false};
-          }
-        }
-      } catch(e) { console.warn('[AUTH] Anfragen-Suche:', e.code); }
+    // Zugriffsdokument des eingeloggten Users existiert?
+    function myZugriffExists() {
+      return exists(/databases/$(database)/documents/zugriff/$(request.auth.uid));
     }
 
-    // ZUGANG PRÜFEN
-    if (zugData && zugData.freigegeben === true) {
-      document.getElementById('page1').style.display = 'none';
-      document.getElementById('page1').classList.remove('active');
-      document.getElementById('innerPages').style.display = 'block';
-      window.scrollTo(0, 0);
-
-      try { await loadAllData(); } catch(e) { console.warn('[AUTH] loadAllData:', e.message); }
-      loadSeenTimestamps();
-
-      // Prüfen ob User auf einer Sanktionsdetailseite war
-      let activeSank = null;
-      try { activeSank = localStorage.getItem('lspd_active_sank'); } catch(e) {}
-
-      let savedPage = 2;
-      try {
-        const sp = parseInt(localStorage.getItem('lspd_page'));
-        if (sp >= 2 && sp <= 12 || sp === 19 || sp === 20) savedPage = sp;
-      } catch(e) {}
-
-      const rangStr = zugData.rang || '1';
-      const rn = rangNumFromStr(rangStr);
-      const isErsteller = rangStr === 'Ersteller';
-      const allowed = getAllowedPages(rn, isErsteller);
-      if (!allowed.includes(savedPage)) savedPage = 2;
-
-      showPage(savedPage);
-      loadUserDashboard(zugData);
-      applyRangPermissions(rangStr);
-
-      // Sanktionsdetailseite wiederherstellen
-      if (activeSank && allowed.includes(10)) {
-        setTimeout(() => {
-          const s = sanktionData.find(x => x.nr === activeSank);
-          if (s) showSanktionPage(activeSank);
-        }, 300);
-      }
-
-      hideLoader();
-    } else {
-      await signOut(auth);
-      hideLoader();
-      document.getElementById('page1').classList.add('active');
-      document.getElementById('loginError').style.display = 'block';
-      setTimeout(() => document.getElementById('loginError').style.display = 'none', 5000);
-    }
-  } else {
-    hideLoader();
-    document.getElementById('page1').classList.add('active');
-  }
-});
-
-async function loadAllData() {
-  await Promise.all([
-    loadMitarbeiter(), loadArchiv(), loadZugriff(),
-    loadSanktionen(), loadSanktionArchiv(), loadSKRules(), loadSKHeaders()
-  ]);
-}
-
-// ===== LOGIN =====
-window.doLogin = async function() {
-  try { await signInWithPopup(auth, provider); }
-  catch(e) { showNotif('Fehler beim Anmelden: ' + e.message, 'error'); }
-}
-
-// ===== REGISTER =====
-window.openRegisterModal = function() {
-  ['reg-id','reg-name','reg-nachname','reg-tel'].forEach(f => {
-    const el = document.getElementById(f);
-    if (el) el.value = '';
-  });
-  const chk = document.getElementById('reg-confirm');
-  if (chk) chk.checked = false;
-  openModal('registerModal');
-}
-
-window.doRegister = async function() {
-  const id       = document.getElementById('reg-id').value.trim();
-  const name     = document.getElementById('reg-name').value.trim();
-  const nachname = document.getElementById('reg-nachname').value.trim();
-  const tel      = document.getElementById('reg-tel').value.trim();
-  const confirmed= document.getElementById('reg-confirm').checked;
-
-  if (!id||!name||!nachname||!tel) return showNotif('Bitte alle Felder ausfüllen!','error');
-  if (!confirmed) return showNotif('Bitte die Warnung bestätigen!','error');
-
-  // Vorprüfung ID in zugriff
-  try {
-    const zugriffSnap = await getDocs(collection(db,'zugriff'));
-    const alleZugriff = zugriffSnap.docs.map(d=>d.data());
-    if (alleZugriff.find(z=>z.id===id)) return showNotif('Ihre ID hat schon einen Account.','error');
-  } catch(e) { console.warn('[REG] Vorprüfung:', e.message); }
-
-  showNotif('Öffne Google Anmeldung...','success');
-  isRegistering = true;
-  let user = null;
-  try {
-    const result = await signInWithPopup(auth, provider);
-    user = result.user;
-  } catch(e) {
-    isRegistering = false;
-    if (e.code === 'auth/popup-closed-by-user') showNotif('Popup geschlossen. Bitte nochmal versuchen.','error');
-    else if (e.code === 'auth/popup-blocked') showNotif('Popup blockiert! Bitte Popups erlauben.','error');
-    else showNotif('Google Fehler: ' + e.message,'error');
-    return;
-  }
-
-  await new Promise(r => setTimeout(r, 800));
-
-  try {
-    // Nochmal prüfen nach Login
-    const zugriffSnap2 = await getDocs(collection(db,'zugriff'));
-    const alleZugriff2 = zugriffSnap2.docs.map(d=>d.data());
-    if (alleZugriff2.find(z=>z.email===user.email)) {
-      isRegistering = false; await signOut(auth);
-      return showNotif('Ihre Email hat schon einen Account.','error');
-    }
-    if (alleZugriff2.find(z=>z.id===id)) {
-      isRegistering = false; await signOut(auth);
-      return showNotif('Ihre ID hat schon einen Account.','error');
-    }
-    const ownAnfrage = await getDoc(doc(db,'anfragen',user.uid));
-    if (ownAnfrage.exists()) {
-      isRegistering = false; await signOut(auth);
-      return showNotif('Sie haben bereits eine Anfrage gesendet.','error');
+    // Zugriffsdaten des eingeloggten Users
+    function myZugriff() {
+      return get(/databases/$(database)/documents/zugriff/$(request.auth.uid)).data;
     }
 
-    const daten = {
-      id, name, nachname, tel,
-      email: user.email, uid: user.uid,
-      rang: '1', freigegeben: false,
-      timestamp: new Date().toISOString()
-    };
-    await setDoc(doc(db,'anfragen',user.uid), daten);
-    await signOut(auth);
-    isRegistering = false;
-    closeModal('registerModal');
-    showNotif('Erfolgreich registriert! Warte auf Freigabe.','success');
-  } catch(e) {
-    isRegistering = false;
-    try { await signOut(auth); } catch(_) {}
-    showNotif('FEHLER: ' + e.message,'error');
-  }
-}
-
-// ===== LOGOUT =====
-window.doLogout = async function() {
-  try { localStorage.removeItem('lspd_page'); } catch(e) {}
-  await signOut(auth);
-  currentUser = null;
-  document.getElementById('innerPages').style.display = 'none';
-  document.querySelectorAll('#innerPages .page').forEach(p=>p.classList.remove('active'));
-  document.getElementById('page1').style.display = '';
-  document.getElementById('page1').classList.add('active');
-  document.getElementById('loginError').style.display = 'none';
-  window.scrollTo(0,0);
-}
-
-// ===== DASHBOARD =====
-let currentUserICId = '';
-let currentUserSanktionen = [];
-
-async function loadUserDashboard(zugData) {
-  const id = zugData.id;
-  currentUserICId = id;
-  document.getElementById('db-id').textContent = id || '';
-
-  try {
-    const maSnap = await getDocs(query(collection(db,'mitarbeiter'), where('id','==',id)));
-    if (!maSnap.empty) {
-      const ma = maSnap.docs[0].data();
-      document.getElementById('db-name').textContent = ma.name||'';
-      document.getElementById('db-tel').textContent = ma.tel||'';
-      document.getElementById('db-dn').textContent = ma.dn||'';
-      document.getElementById('db-rang').textContent = rankName(ma.rank)||'';
-      document.getElementById('db-abt').textContent = ma.abteilung||'';
-      document.getElementById('db-zabt').textContent = ma.zabt||'';
-      document.getElementById('db-invite').textContent = ma.invite||'';
-      document.getElementById('db-rankup').textContent = ma.rankup||'';
-      document.getElementById('db-urlaub').textContent = ma.urlaub||'0';
-      document.getElementById('db-strike').textContent = ma.strike||'0';
-      renderDashboardAusbildungen(ma.ausbildungen||{});
-    } else {
-      ['db-name','db-tel','db-dn','db-rang','db-abt','db-zabt','db-invite','db-rankup','db-urlaub','db-strike']
-        .forEach(id => document.getElementById(id).textContent = '');
-      renderDashboardAusbildungen({});
-    }
-  } catch(e) { console.error('Mitarbeiterdaten:', e); }
-
-  try {
-    const snap = await getDocs(query(collection(db,'sanktionen'), where('id','==',id)));
-    currentUserSanktionen = snap.docs.map(d=>({...d.data(),_id:d.id}));
-    renderSonderInfos();
-  } catch(e) { console.error('Sanktionen:', e); }
-}
-
-function renderDashboardAusbildungen(ausb) {
-  ['GA','EHK','ES','OP','OK','FULA','TST','KS','OKP','FT','JP','ZP','VHP','SP','TOW','AKS'].forEach(k => {
-    const el = document.getElementById('db-chk-'+k);
-    if (el) { el.textContent = ausb[k]===true?'✅':'⬜'; el.style.color = ausb[k]===true?'#22c55e':'#3a5a7a'; }
-  });
-}
-
-function renderSonderInfos() {
-  const box = document.getElementById('db-sonder');
-  if (!box) return;
-  if (currentUserSanktionen.length === 0) {
-    box.innerHTML = '<span style="color:var(--text-muted);font-size:12px;">Keine Sanktionen vorhanden.</span>';
-    return;
-  }
-  box.innerHTML = currentUserSanktionen.map((s,i) => `
-    <div style="margin-bottom:${i<currentUserSanktionen.length-1?'14px':'0'};padding-bottom:${i<currentUserSanktionen.length-1?'14px':'0'};border-bottom:${i<currentUserSanktionen.length-1?'1px solid rgba(30,58,95,0.4)':'none'};">
-      <div style="color:var(--red);font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:4px;">⚠ SANKTION ${s.nr||(i+1)}</div>
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:3px;"><span style="color:var(--text);">Grund:</span> ${s.grund||'–'}</div>
-      <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;"><span style="color:var(--text);">Strafe:</span> ${s.strafe||'–'}</div>
-      ${s.beweise?`<div style="font-size:11px;margin-bottom:6px;color:var(--green);">✅ Sanktion abgearbeitet</div>`:''}
-      <div>
-        <button onclick="toggleSanktionNachrichten('sonder-chat-${s._id}')"
-          style="background:rgba(0,0,0,0.3);border:1px solid var(--border);color:var(--text-dim);padding:4px 10px;border-radius:3px;font-size:11px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:0.5px;">
-          💬 Nachrichten anzeigen
-        </button>
-        <div id="sonder-chat-${s._id}" style="display:none;margin-top:10px;background:rgba(5,10,20,0.6);border:1px solid var(--border);border-radius:4px;padding:10px;">
-          <div id="sonder-chat-msgs-${s._id}" style="min-height:40px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
-            <div style="color:var(--text-muted);font-size:11px;text-align:center;">Wird geladen...</div>
-          </div>
-        </div>
-      </div>
-    </div>`).join('');
-}
-
-window.toggleSanktionNachrichten = async function(containerId) {
-  const el = document.getElementById(containerId);
-  if (!el) return;
-  const isOpen = el.style.display !== 'none';
-  el.style.display = isOpen ? 'none' : 'block';
-  if (!isOpen) {
-    // Nachrichten laden beim Aufklappen
-    const sanktionId = containerId.replace('sonder-chat-','');
-    const s = currentUserSanktionen.find(x=>x._id===sanktionId);
-    if (!s) return;
-    try {
-      const snap = await getDocs(collection(db,'sanktionen',sanktionId,'nachrichten'));
-      const msgs = snap.docs.map(d=>({...d.data(),_id:d.id}));
-      msgs.sort((a,b)=>(a.timestamp||'').localeCompare(b.timestamp||''));
-      const msgsBox = document.getElementById('sonder-chat-msgs-'+sanktionId);
-      if (!msgsBox) return;
-      if (msgs.length === 0) {
-        msgsBox.innerHTML = `<div style="color:var(--text-muted);font-size:11px;text-align:center;">Noch keine Nachrichten.</div>`;
-      } else {
-        msgsBox.innerHTML = msgs.map(m => {
-          const ts = m.timestamp ? new Date(m.timestamp).toLocaleString('de-DE') : '';
-          return `<div style="background:rgba(13,21,37,0.9);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
-            <div style="font-size:10px;color:var(--cyan);font-weight:700;margin-bottom:2px;">${m.userName||m.userEmail||'?'} <span style="color:var(--text-muted);font-weight:400;">— ${ts}</span></div>
-            <div style="font-size:12px;color:var(--text);word-break:break-word;">${m.text||''}</div>
-          </div>`;
-        }).join('');
-        msgsBox.scrollTop = msgsBox.scrollHeight;
-      }
-    } catch(e) {
-      const msgsBox = document.getElementById('sonder-chat-msgs-'+sanktionId);
-      if (msgsBox) msgsBox.innerHTML = `<div style="color:var(--red);font-size:11px;">Fehler beim Laden.</div>`;
-    }
-  }
-}
-
-window.sendBeweisLink = async function() {
-  const skNr = document.getElementById('db-beweis-sknr').value.trim();
-  const link  = document.getElementById('db-beweis-input').value.trim();
-  const status= document.getElementById('db-beweis-status');
-  if (!skNr) { status.textContent='Bitte SK Nummer eingeben.'; return; }
-  if (!link)  { status.textContent='Bitte einen Link eingeben.'; return; }
-  if (!link.startsWith('http://') && !link.startsWith('https://')) {
-    status.textContent='Nur gültige Links erlaubt.'; return;
-  }
-  const sank = currentUserSanktionen.find(s=>s.nr===skNr);
-  if (!sank) { status.textContent=`Keine Sanktion mit SK Nr "${skNr}" gefunden.`; return; }
-  try {
-    const existing = sank.beweise ? sank.beweise+'\n'+link : link;
-    await updateDoc(doc(db,'sanktionen',sank._id), {beweise: existing});
-    sank.beweise = existing;
-    document.getElementById('db-beweis-sknr').value='';
-    document.getElementById('db-beweis-input').value='';
-    status.style.color='var(--green)';
-    status.textContent='Link erfolgreich gesendet!';
-    renderSonderInfos();
-    setTimeout(()=>status.textContent='',3000);
-  } catch(e) { status.style.color='var(--red)'; status.textContent='Fehler: '+e.message; }
-}
-
-// ===== MITARBEITER =====
-async function loadMitarbeiter() {
-  const snap = await getDocs(collection(db,'mitarbeiter'));
-  const defaultAusb = {GA:false,EHK:false,ES:false,OP:false,OK:false,FULA:false,TST:false,KS:false,OKP:false,FT:false,JP:false,ZP:false,VHP:false,SP:false,TOW:false,AKS:false};
-  mitarbeiterData = snap.docs.map(d => {
-    const data = d.data();
-    data.ausbildungen = Object.assign({}, defaultAusb, data.ausbildungen||{});
-    return {...data, _id:d.id};
-  });
-  renderMitarbeiter();
-}
-
-function getRankColor(rank) {
-  const r = parseInt(rank)||0;
-  if (r===1) return '#dc2626';
-  if (r>=2&&r<=4) return '#60a5fa';
-  if (r>=5&&r<=10) return '#16a34a';
-  if (r>=11&&r<=16) return '#ea580c';
-  if (r===17) return '#0891b2';
-  if (r>=18&&r<=22) return '#7c3aed';
-  if (r===23||r===24) return '#2563eb';
-  if (r===25||r===26) return '#7c3aed';
-  if (r===27) return '#1d4ed8';
-  if (r===28||r===29) return '#dc2626';
-  if (r===30) return '#991b1b';
-  return '#333333';
-}
-
-// ===== DIENSTNUMMER HILFSFUNKTIONEN =====
-function getNextFreeDN() {
-  // Nur aktive Mitarbeiter berücksichtigen (kein Archiv)
-  const vergeben = new Set(
-    mitarbeiterData.map(m => parseInt(m.dn)).filter(n => !isNaN(n) && n > 0)
-  );
-  // Nächste freie DN ab 31 bis 1000 finden
-  for (let n = 31; n <= 1000; n++) {
-    if (!vergeben.has(n)) return String(n);
-  }
-  return ''; // Alle vergeben
-}
-
-function getDuplicateDNs() {
-  // DNs die mehr als einmal vorkommen
-  const counts = {};
-  mitarbeiterData.forEach(m => {
-    const dn = (m.dn||'').trim();
-    if (!dn) return;
-    counts[dn] = (counts[dn]||0) + 1;
-  });
-  return new Set(Object.keys(counts).filter(dn => counts[dn] > 1));
-}
-
-function renderMitarbeiter(filtered=null) {
-  const list = filtered||mitarbeiterData;
-  const tbody = document.getElementById('ma-tbody');
-  if (!tbody) return;
-  const sorted = [...list].sort((a,b)=>(parseInt(b.rank)||0)-(parseInt(a.rank)||0));
-
-  // Doppelte DNs ermitteln (nur aus allen Mitarbeitern, nicht aus filtered)
-  const dupDNs = getDuplicateDNs();
-
-  const rows = [];
-  let lastRank = null;
-  sorted.forEach(ma => {
-    const cr = parseInt(ma.rank)||0;
-    if (lastRank!==null && cr!==lastRank) {
-      rows.push(`<tr><td colspan="32" style="padding:0;border:none;"><div style="height:5px;background:${getRankColor(lastRank)};margin:0;"></div></td></tr>`);
-    }
-    lastRank = cr;
-    const div = getDivisionLabel(ma.rank);
-    const ausb = ma.ausbildungen||{};
-    const chk = k => ausb[k]===true?'✅':'⬜';
-    const dn = ma.dn||'';
-    const isDupDN = dn && dupDNs.has(dn);
-    const dnCell = isDupDN
-      ? `<td style="background:rgba(234,88,12,0.25);color:#fb923c;font-weight:700;border:1px solid rgba(234,88,12,0.5);" title="⚠ Doppelte Dienstnummer!">${dn} ⚠</td>`
-      : `<td>${dn}</td>`;
-    rows.push(`<tr>
-      <td>${ma.id||''}</td>${dnCell}<td>${ma.name||''}</td><td>${ma.tel||''}</td>
-      <td>${rankName(ma.rank)||''}</td><td class="sep-col"></td>
-      <td><span class="${div.cls}">${div.label}</span></td><td class="sep-col"></td>
-      <td>${ma.urlaub||0}</td><td>${ma.strike||0}</td>
-      <td>${ma.invite||''}</td><td>${ma.rankup||''}</td>
-      <td style="text-align:center;">${checkVoraussetzung(ma)?'<span style="color:var(--green);font-size:16px;">✅</span>':''}</td>
-      <td>${ma.abteilung||''}</td><td>${ma.zabt||''}</td><td class="sep-col"></td>
-      <td>${chk('GA')}</td><td>${chk('EHK')}</td><td>${chk('ES')}</td><td>${chk('OP')}</td>
-      <td>${chk('OK')}</td><td>${chk('FULA')}</td><td>${chk('TST')}</td><td>${chk('KS')}</td>
-      <td>${chk('OKP')}</td><td>${chk('FT')}</td>
-      <td>${chk('JP')}</td><td>${chk('ZP')}</td><td>${chk('SP')}</td><td>${chk('VHP')}</td><td>${chk('TOW')}</td><td>${chk('AKS')}</td>
-    </tr>`);
-  });
-  tbody.innerHTML = rows.join('');
-}
-
-window.openAddMitarbeiterModal = function() {
-  editingMaId = null;
-  document.querySelector('#addMaModal .modal-title').textContent='Mitarbeiter Hinzufügen';
-  document.getElementById('addMaSubmitBtn').textContent='Hinzufügen';
-  document.getElementById('ma-id').readOnly=false;
-  openModal('addMaModal');
-  // DN automatisch vorausfüllen
-  setTimeout(()=>{
-    const dnField = document.getElementById('ma-dn');
-    if (dnField && !dnField.value) dnField.value = getNextFreeDN();
-  }, 30);
-}
-
-window.openEditMitarbeiterModal = async function() {
-  const searchId = document.getElementById('ma-search').value.trim();
-  if (!searchId) return showNotif('Bitte ID eingeben','error');
-  await loadMitarbeiter();
-  const ma = mitarbeiterData.find(m=>m.id===searchId);
-  if (!ma) return showNotif('Mitarbeiter nicht gefunden','error');
-  editingMaId = ma._id;
-  document.querySelector('#addMaModal .modal-title').textContent='Mitarbeiter Bearbeiten';
-  document.getElementById('addMaSubmitBtn').textContent='Speichern';
-  document.getElementById('ma-id').readOnly=true;
-  openModal('addMaModal');
-  setTimeout(()=>{
-    const fill=(id,val)=>{ const el=document.getElementById(id); if(el) el.value=val!==undefined&&val!==null?String(val):''; };
-    fill('ma-id',ma.id); fill('ma-dn',ma.dn); fill('ma-name',ma.name); fill('ma-tel',ma.tel);
-    fill('ma-rank',ma.rank); fill('ma-invite',ma.invite); fill('ma-rankup',ma.rankup);
-    fill('ma-abt',ma.abteilung); fill('ma-zabt',ma.zabt);
-    document.getElementById('ma-urlaub').textContent=String(ma.urlaub||0);
-    document.getElementById('ma-strike').textContent=String(ma.strike||0);
-    updateDivision();
-  },30);
-}
-
-window.addMitarbeiter = async function() {
-  const id = document.getElementById('ma-id').value.trim();
-  if (!id) return showNotif('ID erforderlich','error');
-  const today = new Date().toISOString().split('T')[0];
-  const isNew = !editingMaId;
-  const newRank = document.getElementById('ma-rank').value;
-
-  // ID-Dopplung prüfen (nur bei neuem Mitarbeiter)
-  if (isNew) {
-    const idConflict = mitarbeiterData.find(m => m.id === id);
-    if (idConflict) return showNotif(`ID ${id} existiert bereits (${idConflict.name||idConflict.id})!`, 'error');
-  }
-  const data = {
-    id, dn: document.getElementById('ma-dn').value.trim(),
-    name: document.getElementById('ma-name').value.trim(),
-    tel: document.getElementById('ma-tel').value.trim(),
-    rank: newRank,
-    invite: isNew ? today : (document.getElementById('ma-invite').value || (mitarbeiterData.find(m=>m._id===editingMaId)||{}).invite||today),
-    rankup: document.getElementById('ma-rankup').value,
-    abteilung: document.getElementById('ma-abt').value.trim(),
-    zabt: document.getElementById('ma-zabt').value.trim(),
-    urlaub: parseInt(document.getElementById('ma-urlaub').textContent)||0,
-    strike: parseInt(document.getElementById('ma-strike').textContent)||0,
-  };
-
-  // DN-Dopplung prüfen (nur wenn DN ausgefüllt)
-  if (data.dn) {
-    const dnConflict = mitarbeiterData.find(m =>
-      m.dn === data.dn && m._id !== editingMaId
-    );
-    if (dnConflict) {
-      return showNotif(`DN ${data.dn} ist bereits vergeben (${dnConflict.name||dnConflict.id})!`, 'error');
-    }
-  }
-  try {
-    if (editingMaId) {
-      const existing = mitarbeiterData.find(m=>m._id===editingMaId);
-      data.ausbildungen = existing?.ausbildungen||{};
-      // Rang-Wechsel: Datum automatisch setzen + Rang-Historie schreiben
-      if (existing && existing.rank !== newRank) {
-        data.rankup = new Date().toISOString().split('T')[0];
-        // Rang-Historie schreiben
-        await addDoc(collection(db,'rangHistorie'), {
-          mitarbeiterId: id,
-          mitarbeiterName: data.name||existing.name||'',
-          alterRang: existing.rank||'',
-          neuerRang: newRank,
-          alterRangName: rankName(existing.rank),
-          neuerRangName: rankName(newRank),
-          datum: new Date().toISOString(),
-          geaendertVon: currentUser?.email||'',
-          geaendertVonUID: currentUser?.uid||''
-        });
-        await writeLog('mitarbeiter','update',`Rang geändert: ${rankName(existing.rank)} → ${rankName(newRank)} für ${data.name||id} (ID: ${id})`,id);
-      } else {
-        // Genau geänderte Felder ermitteln
-        const changes = [];
-        if (existing) {
-          if (existing.name !== data.name) changes.push(`Name: "${existing.name||'–'}" → "${data.name||'–'}"`);
-          if (existing.dn !== data.dn) changes.push(`DN: "${existing.dn||'–'}" → "${data.dn||'–'}"`);
-          if (existing.tel !== data.tel) changes.push(`Tel: "${existing.tel||'–'}" → "${data.tel||'–'}"`);
-          if (existing.abteilung !== data.abteilung) changes.push(`Abteilung: "${existing.abteilung||'–'}" → "${data.abteilung||'–'}"`);
-          if (existing.zabt !== data.zabt) changes.push(`ZweitAbt: "${existing.zabt||'–'}" → "${data.zabt||'–'}"`);
-          if (String(existing.urlaub) !== String(data.urlaub)) changes.push(`Urlaub: ${existing.urlaub||0} → ${data.urlaub}`);
-          if (String(existing.strike) !== String(data.strike)) changes.push(`Strike: ${existing.strike||0} → ${data.strike}`);
-          if (existing.invite !== data.invite) changes.push(`Invite: "${existing.invite||'–'}" → "${data.invite||'–'}"`);
-          if (existing.rankup !== data.rankup) changes.push(`RankUp-Datum: "${existing.rankup||'–'}" → "${data.rankup||'–'}"`);
-        }
-        const detailText = changes.length > 0
-          ? `Mitarbeiter bearbeitet: ${data.name||id} (ID: ${id}) — ${changes.join(' | ')}`
-          : `Mitarbeiter bearbeitet: ${data.name||id} (ID: ${id}) — keine Änderungen`;
-        await writeLog('mitarbeiter','update', detailText, id);
-      }
-      await updateDoc(doc(db,'mitarbeiter',editingMaId), data);
-      showNotif('Mitarbeiter aktualisiert','success');
-    } else {
-      data.ausbildungen = {GA:false,EHK:false,ES:false,OP:false,OK:false,FULA:false,TST:false,KS:false,OKP:false,FT:false,JP:false,ZP:false,VHP:false,SP:false,TOW:false,AKS:false};
-      data.rankup = data.rankup||today;
-      await addDoc(collection(db,'mitarbeiter'), data);
-      await writeLog('mitarbeiter','create',`Mitarbeiter hinzugefügt: ${data.name||id} (ID: ${id})`,id);
-      showNotif('Mitarbeiter hinzugefügt','success');
-    }
-    closeModal('addMaModal');
-    await loadMitarbeiter();
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
-
-window.archiveMitarbeiter = async function() {
-  const id = document.getElementById('ma-search').value.trim();
-  if (!id) return showNotif('Bitte ID eingeben','error');
-  const ma = mitarbeiterData.find(m=>m.id===id);
-  if (!ma) return showNotif('Mitarbeiter nicht gefunden','error');
-  document.getElementById('del-title').textContent = 'Wirklich archivieren?';
-  document.getElementById('del-msg').textContent = `Möchtest du "${ma.name||ma.id}" (ID: ${id}, DN: ${ma.dn||'–'}) wirklich ins Archiv verschieben?`;
-  document.getElementById('del-confirm-btn').textContent = 'Ja, Archivieren';
-  deleteCallback = async () => {
-    try {
-      await addDoc(collection(db,'archiv'), ma);
-      await deleteDoc(doc(db,'mitarbeiter',ma._id));
-      await writeLog('mitarbeiter','archiv',`Mitarbeiter archiviert: ${ma.name||id} (ID: ${id})`,id);
-      showNotif('Mitarbeiter archiviert','success');
-      await loadMitarbeiter(); await loadArchiv();
-    } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-  };
-  openModal('deleteConfirmModal');
-}
-
-window.searchMitarbeiter = function() {
-  const q = document.getElementById('ma-search').value.trim().toLowerCase();
-  if (!q) { renderMitarbeiter(); return; }
-  renderMitarbeiter(mitarbeiterData.filter(m=>(m.id||'').toLowerCase().includes(q)||(m.name||'').toLowerCase().includes(q)));
-}
-
-window.openAusbildungModal = async function() {
-  const id = document.getElementById('ma-search').value.trim();
-  if (!id) return showNotif('Bitte ID eingeben','error');
-  await loadMitarbeiter();
-  const ma = mitarbeiterData.find(m=>m.id===id);
-  if (!ma) return showNotif('Mitarbeiter nicht gefunden','error');
-  ausbildungTargetId = ma._id;
-  document.getElementById('ausb-ma-name').textContent=`Mitarbeiter: ${ma.name||ma.id}`;
-  openModal('ausbildungModal');
-  setTimeout(()=>{
-    const ausb = ma.ausbildungen||{};
-    ['GA','EHK','ES','OP','OK','FULA','TST','KS','OKP','FT','JP','ZP','VHP','SP','TOW','AKS'].forEach(k=>{
-      const el=document.getElementById('ausb-'+k);
-      if(el) el.checked=!!ausb[k];
-    });
-  },50);
-}
-
-window.saveAusbildung = async function() {
-  const ausb = {};
-  ['GA','EHK','ES','OP','OK','FULA','TST','KS','OKP','FT','JP','ZP','VHP','SP','TOW','AKS'].forEach(k=>{
-    ausb[k]=document.getElementById('ausb-'+k).checked;
-  });
-  const ma = mitarbeiterData.find(m=>m._id===ausbildungTargetId);
-  const altAusb = ma?.ausbildungen || {};
-
-  // Genau welche Ausbildungen geändert wurden
-  const hinzu    = Object.keys(ausb).filter(k => ausb[k] === true  && altAusb[k] !== true);
-  const entfernt = Object.keys(ausb).filter(k => ausb[k] === false && altAusb[k] === true);
-  const changes  = [];
-  if (hinzu.length > 0)    changes.push(`Hinzugefügt: ${hinzu.join(', ')}`);
-  if (entfernt.length > 0) changes.push(`Entfernt: ${entfernt.join(', ')}`);
-  const detailText = changes.length > 0
-    ? `Ausbildungen bearbeitet für ${ma?.name||ma?.id||ausbildungTargetId} (ID: ${ma?.id||ausbildungTargetId}) — ${changes.join(' | ')}`
-    : `Ausbildungen bearbeitet für ${ma?.name||ma?.id||ausbildungTargetId} (ID: ${ma?.id||ausbildungTargetId}) — keine Änderungen`;
-
-  try {
-    await updateDoc(doc(db,'mitarbeiter',ausbildungTargetId), {ausbildungen:ausb});
-    await writeLog('mitarbeiter','update', detailText, ma?.id||ausbildungTargetId);
-    showNotif('Ausbildungen gespeichert','success');
-    closeModal('ausbildungModal');
-    await loadMitarbeiter();
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
-
-// ===== ARCHIV =====
-async function loadArchiv() {
-  const snap = await getDocs(collection(db,'archiv'));
-  archivData = snap.docs.map(d=>({...d.data(),_id:d.id}));
-  renderArchiv();
-}
-
-function renderArchiv(filtered=null) {
-  const list = filtered||archivData;
-  const tbody = document.getElementById('arch-tbody');
-  if (!tbody) return;
-  tbody.innerHTML = list.map(ma=>{
-    const div=getDivisionLabel(ma.rank);
-    const ausb=ma.ausbildungen||{};
-    const chk=k=>ausb[k]===true?'✅':'⬜';
-    return `<tr>
-      <td>${ma.id||''}</td><td>${ma.dn||''}</td><td>${ma.name||''}</td><td>${ma.tel||''}</td>
-      <td>${rankName(ma.rank)||''}</td><td class="sep-col"></td>
-      <td><span class="${div.cls}">${div.label}</span></td><td class="sep-col"></td>
-      <td>${ma.urlaub||0}</td><td>${ma.strike||0}</td>
-      <td>${ma.invite||''}</td><td>${ma.rankup||''}</td>
-      <td style="text-align:center;">${checkVoraussetzung(ma)?'<span style="color:var(--green);font-size:16px;">✅</span>':''}</td>
-      <td>${ma.abteilung||''}</td><td>${ma.zabt||''}</td><td class="sep-col"></td>
-      <td>${chk('GA')}</td><td>${chk('EHK')}</td><td>${chk('ES')}</td><td>${chk('OP')}</td>
-      <td>${chk('OK')}</td><td>${chk('FULA')}</td><td>${chk('TST')}</td><td>${chk('KS')}</td>
-      <td>${chk('OKP')}</td><td>${chk('FT')}</td>
-      <td>${chk('JP')}</td><td>${chk('ZP')}</td><td>${chk('SP')}</td><td>${chk('VHP')}</td><td>${chk('TOW')}</td><td>${chk('AKS')}</td>
-    </tr>`;
-  }).join('');
-}
-
-window.searchArchive = function() {
-  const q=document.getElementById('arch-search').value.trim().toLowerCase();
-  renderArchiv(!q?null:archivData.filter(m=>(m.id||'').toLowerCase().includes(q)));
-}
-
-window.deleteArchived = function() {
-  const id=document.getElementById('arch-search').value.trim();
-  if (!id) return showNotif('Bitte ID eingeben','error');
-  const ma=archivData.find(m=>m.id===id);
-  if (!ma) return showNotif('Nicht gefunden','error');
-  document.getElementById('del-msg').textContent=`Mitarbeiter "${ma.name||ma.id}" wirklich aus dem Archiv löschen?`;
-  deleteCallback=async()=>{
-    await deleteDoc(doc(db,'archiv',ma._id));
-    await writeLog('mitarbeiter','delete',`Archivierter Mitarbeiter gelöscht: ${ma.name||id} (ID: ${id})`,id);
-    showNotif('Gelöscht','success');
-    await loadArchiv();
-  };
-  openModal('deleteConfirmModal');
-}
-
-// ===== ENTLASSUNGSARCHIV (Seite 19) =====
-let entlassungsData = []; // Array von Gruppen
-
-async function loadEntlassungsarchiv() {
-  try {
-    const snap = await getDocs(collection(db,'entlassungsarchiv'));
-    entlassungsData = snap.docs.map(d=>({...d.data(), _id:d.id}));
-    renderEntlassungsarchiv();
-  } catch(e) { console.warn('[ENTLASS] Laden fehlgeschlagen:', e.message); }
-}
-
-function renderEntlassungsarchiv(filtered=null) {
-  const container = document.getElementById('entlass-container');
-  if (!container) return;
-  const list = filtered || entlassungsData;
-  // Sortiert nach Datum absteigend
-  const sorted = [...list].sort((a,b)=>(b.erstelltAm||'').localeCompare(a.erstelltAm||''));
-  if (sorted.length === 0) {
-    container.innerHTML = `<div class="archiv-empty">📂 Kein Entlassungsarchiv vorhanden.</div>`;
-    return;
-  }
-  container.innerHTML = sorted.map((g, gi) => {
-    const mitarbeiter = g.mitarbeiter || [];
-    return `<div class="entlass-group">
-      <div class="entlass-group-header" onclick="toggleEntlassGroup(${gi})">
-        <span class="entlass-group-arrow">▶</span>
-        <span class="entlass-group-title">${g.name||'Unbenannte Gruppe'}</span>
-        <span class="entlass-group-zeitraum">${g.von||'?'} – ${g.bis||'?'}</span>
-        <span class="entlass-group-count">${mitarbeiter.length} Mitarbeiter</span>
-      </div>
-      <div class="entlass-group-body" id="entlass-body-${gi}">
-        <div class="table-wrapper">
-          <table class="data-table" style="width:100%;">
-            <thead><tr>
-              <th>ID</th><th>DN</th><th>Name</th><th>Tel.</th><th>Rang</th><th>Division</th>
-              <th>Invite</th><th>Last RankUp</th><th>Abteilung</th>
-            </tr></thead>
-            <tbody>
-              ${mitarbeiter.map(ma => {
-                const div = getDivisionLabel(ma.rank);
-                return `<tr>
-                  <td>${ma.id||''}</td>
-                  <td>${ma.dn||''}</td>
-                  <td>${ma.name||''}</td>
-                  <td>${ma.tel||''}</td>
-                  <td>${rankName(ma.rank)||''}</td>
-                  <td><span class="${div.cls}">${div.label}</span></td>
-                  <td>${ma.invite||''}</td>
-                  <td>${ma.rankup||''}</td>
-                  <td>${ma.abteilung||''}</td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-window.toggleEntlassGroup = function(gi) {
-  const header = document.querySelector(`#entlass-container .entlass-group:nth-child(${gi+1}) .entlass-group-header`);
-  const body   = document.getElementById('entlass-body-'+gi);
-  if (!header||!body) return;
-  const isOpen = body.classList.contains('open');
-  body.classList.toggle('open', !isOpen);
-  header.classList.toggle('open', !isOpen);
-}
-
-window.openEntlassungModal = function() {
-  if (archivData.length === 0) return showNotif('Kein Mitarbeiter im Archiv vorhanden.','error');
-  document.getElementById('entlass-anzahl').textContent = archivData.length;
-  openModal('entlassungModal');
-}
-
-window.doEntlassung = async function() {
-  const name = document.getElementById('entlass-name').value.trim();
-  const von  = document.getElementById('entlass-von').value;
-  const bis  = document.getElementById('entlass-bis').value;
-  if (!name) return showNotif('Bitte einen Gruppennamen eingeben!','error');
-  if (!von)  return showNotif('Bitte das Von-Datum eingeben!','error');
-  if (!bis)  return showNotif('Bitte das Bis-Datum eingeben!','error');
-  if (von > bis) return showNotif('Das Von-Datum darf nicht nach dem Bis-Datum liegen!','error');
-
-  try {
-    // Alle aktuellen Archiv-Mitarbeiter als Gruppe speichern
-    const gruppe = {
-      name,
-      von,
-      bis,
-      erstelltAm: new Date().toISOString(),
-      erstelltVon: currentUser?.email||'',
-      mitarbeiter: archivData.map(ma => {
-        const {_id, ...rest} = ma;
-        return rest;
-      })
-    };
-    await addDoc(collection(db,'entlassungsarchiv'), gruppe);
-
-    // Alle Einträge aus dem Archiv löschen
-    for (const ma of archivData) {
-      await deleteDoc(doc(db,'archiv', ma._id));
+    // Zugriffsdokument eines Ziel-Users existiert?
+    function targetZugriffExists(userId) {
+      return exists(/databases/$(database)/documents/zugriff/$(userId));
     }
 
-    await writeLog('mitarbeiter','archiv',
-      `${archivData.length} Mitarbeiter ins Entlassungsarchiv verschoben: "${name}" (${von} – ${bis})`,
-      name
-    );
-
-    closeModal('entlassungModal');
-    showNotif(`${gruppe.mitarbeiter.length} Mitarbeiter in "${name}" archiviert!`, 'success');
-    await loadArchiv();
-    await loadEntlassungsarchiv();
-    showPage(19);
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
-
-window.searchEntlassung = function() {
-  const q = document.getElementById('entlass-search').value.trim().toLowerCase();
-  if (!q) { renderEntlassungsarchiv(); return; }
-  renderEntlassungsarchiv(entlassungsData.filter(g =>
-    (g.name||'').toLowerCase().includes(q) ||
-    (g.von||'').includes(q) ||
-    (g.bis||'').includes(q)
-  ));
-}
-
-window.deleteEntlassungsgruppe = function() {
-  const q = document.getElementById('entlass-search').value.trim();
-  if (!q) return showNotif('Bitte Gruppenname ins Suchfeld eingeben','error');
-  const found = entlassungsData.find(g=>(g.name||'').toLowerCase()===q.toLowerCase());
-  if (!found) return showNotif('Gruppe nicht gefunden','error');
-  document.getElementById('del-title').textContent = 'Gruppe löschen?';
-  document.getElementById('del-msg').textContent = `Entlassungsgruppe "${found.name}" mit ${(found.mitarbeiter||[]).length} Mitarbeitern wirklich löschen?`;
-  document.getElementById('del-confirm-btn').textContent = 'Ja, Löschen';
-  deleteCallback = async () => {
-    await deleteDoc(doc(db,'entlassungsarchiv', found._id));
-    await writeLog('mitarbeiter','delete',`Entlassungsgruppe gelöscht: "${found.name}"`, found.name);
-    showNotif('Gruppe gelöscht','success');
-    await loadEntlassungsarchiv();
-  };
-  openModal('deleteConfirmModal');
-}
-
-// ===== ZUGRIFF =====
-async function loadZugriff() {
-  const [zugriffSnap, anfragenSnap] = await Promise.all([
-    getDocs(collection(db,'zugriff')),
-    getDocs(collection(db,'anfragen'))
-  ]);
-  const zugriffDocs = zugriffSnap.docs.map(d=>({...d.data(),_id:d.id,_quelle:'zugriff'}));
-  const anfragenDocs = anfragenSnap.docs.map(d=>({...d.data(),_id:d.id,_quelle:'anfragen'}));
-  const zugriffEmails = new Set(zugriffDocs.map(z=>z.email));
-  const zugriffIds = new Set(zugriffDocs.map(z=>z.id));
-  const nochNicht = anfragenDocs.filter(a=>!zugriffEmails.has(a.email)&&!zugriffIds.has(a.id));
-  zugriffData = [...zugriffDocs,...nochNicht];
-  renderZugriff();
-}
-
-function renderZugriff(filtered=null) {
-  const list=filtered||zugriffData;
-  const tbody=document.getElementById('zug-tbody');
-  if (!tbody) return;
-  tbody.innerHTML=list.map(z=>{
-    const status=z.freigegeben
-      ?'<span class="status-freigegeben">Freigegeben</span>'
-      :'<span class="status-wartet">Wartet</span>';
-    const sel=`<select class="freigabe-select" onchange="setFreigabe('${z._id}',this.value,'${z._quelle||'zugriff'}')">
-      <option value="nein" ${!z.freigegeben?'selected':''}>Nein</option>
-      <option value="ja" ${z.freigegeben?'selected':''}>Ja</option>
-    </select>`;
-    const rangNamen = {'1':'Mitarbeiter','6':'PA','7':'IU','8':'IU Leitung','9':'HR','10':'HR Leitung','Admin':'Admin','Leaderschaft':'Leaderschaft','Ersteller':'Ersteller'};
-    const rangRaw = (!z.freigegeben&&(z.rang==='Admin'||!z.rang)) ? '1' : (z.rang||'1');
-    const rangAnzeige = rangNamen[rangRaw] || rangRaw;
-    return `<tr>
-      <td>${z.id||''}</td><td>${z.name||''}</td><td>${z.nachname||''}</td>
-      <td>${z.tel||''}</td><td>${z.email||''}</td>
-      <td>${rangAnzeige}</td><td>${status}</td><td>${sel}</td>
-    </tr>`;
-  }).join('');
-}
-
-window.setFreigabe = async function(docId, val, quelle='zugriff') {
-  const freigegeben = val==='ja';
-  try {
-    const z = zugriffData.find(x=>x._id===docId);
-    if (!z) return showNotif('Eintrag nicht gefunden','error');
-    const updateData={freigegeben};
-    if (freigegeben&&(z.rang==='Admin'||!z.rang||z.rang==='')) updateData.rang='1';
-
-    if ((z._quelle||quelle)==='anfragen') {
-      await updateDoc(doc(db,'anfragen',docId), updateData);
-      if (freigegeben&&z.id) {
-        try {
-          const q=query(collection(db,'mitarbeiter'),where('id','==',z.id));
-          const qs=await getDocs(q);
-          if (qs.empty) {
-            const today=new Date().toISOString().split('T')[0];
-            const autoDN = getNextFreeDN();
-            await addDoc(collection(db,'mitarbeiter'),{
-              id:z.id,name:'',dn:autoDN,tel:'',rank:'',
-              invite:today,rankup:today,abteilung:'',zabt:'',urlaub:0,strike:0,
-              ausbildungen:{GA:false,EHK:false,ES:false,OP:false,OK:false,FULA:false,TST:false,KS:false,OKP:false,FT:false,JP:false,ZP:false,VHP:false,SP:false,TOW:false,AKS:false},
-              linkedUid:z.uid||''
-            });
-            await loadMitarbeiter();
-          }
-        } catch(e) { console.warn('[FREIGABE] MA anlegen:', e.message); }
-      }
-    } else {
-      await updateDoc(doc(db,'zugriff',docId), updateData);
-      if (z) { z.freigegeben=freigegeben; if(updateData.rang) z.rang=updateData.rang; }
-      if (freigegeben&&z) await handleFreigabe(z);
+    // Zugriffsdaten eines Ziel-Users
+    function targetZugriff(userId) {
+      return get(/databases/$(database)/documents/zugriff/$(userId)).data;
     }
 
-    await writeLog('zugriff','freigabe',
-      `Zugriff ${freigegeben?'freigegeben':'gesperrt'}: ${z.name||z.id||''} (${z.email||''})`,
-      z.id||docId
-    );
-    showNotif(freigegeben?'Zugriff freigegeben':'Zugriff entzogen', freigegeben?'success':'error');
-    await loadZugriff();
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
+    // =========================================================
+    // RANG-NUMMER KONVERTIERUNG
+    // Rang-String → numerischer Wert für Vergleiche
+    // 1=Mitarbeiter, 6=PA, 7=IU, 8=IU-Leitung,
+    // 9=HR, 10=HR-Leitung, 999=Admin, 998=Leaderschaft, 1000=Ersteller
+    // =========================================================
 
-async function handleFreigabe(z) {
-  const q=query(collection(db,'mitarbeiter'),where('id','==',z.id));
-  const qs=await getDocs(q);
-  if (qs.empty) {
-    const autoDN = getNextFreeDN();
-    await addDoc(collection(db,'mitarbeiter'),{
-      id:z.id,name:'',dn:autoDN,tel:'',rank:'',
-      invite:'',rankup:'',abteilung:'',zabt:'',urlaub:0,strike:0,
-      ausbildungen:{GA:false,EHK:false,ES:false,OP:false,OK:false,FULA:false,TST:false,KS:false,OKP:false,FT:false,JP:false,ZP:false,VHP:false,SP:false,TOW:false,AKS:false},
-      linkedUid:z.uid||''
-    });
-    await loadMitarbeiter();
-  } else {
-    await updateDoc(doc(db,'mitarbeiter',qs.docs[0].id),{linkedUid:z.uid||''});
-    await loadMitarbeiter();
-  }
-}
-
-window.addZugriff = async function() {
-  const id=document.getElementById('az-id').value.trim();
-  const email=document.getElementById('az-email').value.trim();
-  if (!id) return showNotif('ID erforderlich','error');
-  if (zugriffData.find(z=>z.id===id)) return showNotif('Diese ID existiert bereits!','error');
-  if (email&&zugriffData.find(z=>z.email===email)) return showNotif('Diese Email existiert bereits!','error');
-  const data={
-    id, name:document.getElementById('az-name').value.trim(),
-    nachname:document.getElementById('az-nachname').value.trim(),
-    tel:document.getElementById('az-tel').value.trim(),
-    email, rang:'1', freigegeben:false,
-    uid:'manual-'+id+'-'+Date.now()
-  };
-  try {
-    const docRef=doc(collection(db,'zugriff'));
-    await setDoc(docRef, data);
-    await writeLog('zugriff','create',`Zugriff manuell erstellt für: ${data.name||id} (${email})`,id);
-    showNotif('Zugriff hinzugefügt','success');
-    closeModal('addZugriffModal');
-    await loadZugriff();
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
-
-window.searchZugriff=function(){
-  const q=document.getElementById('zug-search').value.trim().toLowerCase();
-  renderZugriff(!q?null:zugriffData.filter(z=>(z.id||'').toLowerCase().includes(q)||(z.name||'').toLowerCase().includes(q)||(z.email||'').toLowerCase().includes(q)));
-}
-
-window.openEditZugriffModal=function(){
-  const id=document.getElementById('zug-search').value.trim();
-  if (!id) return showNotif('Bitte ID eingeben','error');
-  const z=zugriffData.find(x=>x.id===id);
-  if (!z) return showNotif('Nicht gefunden','error');
-  if (currentUser&&z.uid===currentUser.uid) return showNotif('Du kannst deine eigenen Rechte nicht bearbeiten!','error');
-  openModal('editZugriffModal');
-  setTimeout(()=>{
-    const fill=(elId,val)=>{ const el=document.getElementById(elId); if(el) el.value=val!==undefined&&val!==null?String(val):''; };
-    fill('ez-idx',z._id); fill('ez-id',z.id); fill('ez-name',z.name);
-    fill('ez-nachname',z.nachname); fill('ez-tel',z.tel); fill('ez-email',z.email);
-    document.getElementById('ez-rang').value=z.rang||'1';
-  },30);
-}
-
-window.saveZugriff=async function(){
-  const docId=document.getElementById('ez-idx').value;
-  const z=zugriffData.find(x=>x._id===docId);
-  if (z&&currentUser&&z.uid===currentUser.uid) return showNotif('Du kannst deine eigenen Rechte nicht bearbeiten!','error');
-  const data={
-    name:document.getElementById('ez-name').value.trim(),
-    nachname:document.getElementById('ez-nachname').value.trim(),
-    tel:document.getElementById('ez-tel').value.trim(),
-    email:document.getElementById('ez-email').value.trim(),
-    rang:document.getElementById('ez-rang').value
-  };
-  // Genau geänderte Felder ermitteln
-  const changes = [];
-  if (z) {
-    if ((z.name||'') !== data.name) changes.push(`Name: "${z.name||'–'}" → "${data.name||'–'}"`);
-    if ((z.nachname||'') !== data.nachname) changes.push(`Nachname: "${z.nachname||'–'}" → "${data.nachname||'–'}"`);
-    if ((z.tel||'') !== data.tel) changes.push(`Tel: "${z.tel||'–'}" → "${data.tel||'–'}"`);
-    if ((z.email||'') !== data.email) changes.push(`Email: "${z.email||'–'}" → "${data.email||'–'}"`);
-    if ((z.rang||'') !== data.rang) changes.push(`Rang: "${z.rang||'–'}" → "${data.rang}"`);
-  }
-  const detailStr = changes.length > 0 ? changes.join(' | ') : 'keine Änderungen';
-  try {
-    const quelle=z?(z._quelle||'zugriff'):'zugriff';
-    if (quelle==='anfragen') await updateDoc(doc(db,'anfragen',docId), data);
-    else await updateDoc(doc(db,'zugriff',docId), data);
-    await writeLog('zugriff','update',`Zugriff bearbeitet: ${z?.name||z?.id||''} (ID: ${z?.id||'?'}) — ${detailStr}`,z?.id||docId);
-    showNotif('Gespeichert','success');
-    closeModal('editZugriffModal');
-    await loadZugriff();
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
-
-window.deleteZugriff=function(){
-  const id=document.getElementById('zug-search').value.trim();
-  if (!id) return showNotif('Bitte ID eingeben','error');
-  const z=zugriffData.find(x=>x.id===id);
-  if (!z) return showNotif('Nicht gefunden','error');
-  document.getElementById('del-msg').textContent=`Zugriff für "${z.name||z.id}" wirklich löschen?`;
-  deleteCallback=async()=>{
-    const quelle=z._quelle||'zugriff';
-    if (quelle==='anfragen') await deleteDoc(doc(db,'anfragen',z._id));
-    else {
-      await deleteDoc(doc(db,'zugriff',z._id));
-      // Auch anfrage löschen falls vorhanden
-      if (z.uid) try { await deleteDoc(doc(db,'anfragen',z.uid)); } catch(e){}
+    function rangToNum(r) {
+      return r == 'Ersteller'    ? 1000 :
+             r == 'Admin'        ? 999  :
+             r == 'Leaderschaft' ? 998  :
+             r == '10'           ? 10   :
+             r == '9'            ? 9    :
+             r == '8'            ? 8    :
+             r == '7'            ? 7    :
+             r == '6'            ? 6    :
+             r == '1'            ? 1    : 0;
     }
-    await writeLog('zugriff','delete',`Zugriff gelöscht: ${z.name||z.id||''} (${z.email||''})`,z.id||'');
-    showNotif('Gelöscht','success');
-    await loadZugriff();
-  };
-  openModal('deleteConfirmModal');
-}
 
-// ===== SANKTIONEN =====
-async function loadSanktionen() {
-  const snap=await getDocs(collection(db,'sanktionen'));
-  sanktionData=snap.docs.map(d=>({...d.data(),_id:d.id}));
-  renderSanktionen();
-}
-
-async function loadSanktionArchiv() {
-  const snap=await getDocs(collection(db,'sanktionenArchiv'));
-  sanktionArchivData=snap.docs.map(d=>({...d.data(),_id:d.id}));
-  renderSanktionArchiv();
-}
-
-function renderSanktionArchiv(filtered=null){
-  const list = filtered || sanktionArchivData;
-  const container = document.getElementById('sank-archiv-container');
-  if (!container) return;
-
-  if (list.length === 0) {
-    container.innerHTML = `<div class="archiv-empty">📂 Kein Archiv vorhanden.</div>`;
-    return;
-  }
-
-  // Gruppieren nach ID
-  const groups = {};
-  list.forEach(s => {
-    const key = s.id || '—';
-    if (!groups[key]) groups[key] = { id: key, name: s.name || '—', sanktionen: [] };
-    groups[key].sanktionen.push(s);
-    // Name aktualisieren falls vorhanden
-    if (s.name && groups[key].name === '—') groups[key].name = s.name;
-  });
-
-  // Sortiert nach ID
-  const sortedGroups = Object.values(groups).sort((a,b) => a.id.localeCompare(b.id));
-
-  container.innerHTML = sortedGroups.map((g, gi) => `
-    <div class="archiv-group">
-      <div class="archiv-group-header" onclick="toggleArchivGroup(${gi})">
-        <span class="archiv-group-arrow">▶</span>
-        <span class="archiv-group-id">ID: ${g.id}</span>
-        <span class="archiv-group-name">${g.name}</span>
-        <span class="archiv-group-count">${g.sanktionen.length} Sanktion${g.sanktionen.length !== 1 ? 'en' : ''}</span>
-      </div>
-      <div class="archiv-group-body" id="archiv-body-${gi}">
-        <table>
-          <thead><tr><th>SK Nr.</th><th>Grund der Sanktion</th><th>Strafe</th><th>Sanktionsgrundbeweise</th><th>Sanktion abgearbeitet</th></tr></thead>
-          <tbody>
-            ${g.sanktionen.map(s => `<tr>
-              <td style="font-family:'Orbitron',monospace;font-size:11px;color:var(--cyan);">${s.nr||'—'}</td>
-              <td>${s.grund||'—'}</td>
-              <td>${s.strafe||'—'}</td>
-              <td>${s.grundbeweise||'—'}</td>
-              <td>${s.beweise ? '✅ Sanktion abgearbeitet' : '—'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `).join('');
-}
-
-window.toggleArchivGroup = function(gi) {
-  const header = document.querySelector(`#sank-archiv-container .archiv-group:nth-child(${gi+1}) .archiv-group-header`);
-  const body   = document.getElementById('archiv-body-'+gi);
-  if (!header || !body) return;
-  const isOpen = body.classList.contains('open');
-  body.classList.toggle('open', !isOpen);
-  header.classList.toggle('open', !isOpen);
-}
-
-window.searchSanktionArchiv=function(){
-  const q=document.getElementById('sank-archiv-search').value.trim().toLowerCase();
-  if (!q){renderSanktionArchiv();return;}
-  renderSanktionArchiv(sanktionArchivData.filter(s=>(s.nr||'').toLowerCase().includes(q)));
-}
-
-window.deleteSanktionArchiv=function(){
-  const nr=document.getElementById('sank-archiv-search').value.trim();
-  if (!nr) return showNotif('Bitte SK Nummer eingeben','error');
-  const found=sanktionArchivData.filter(s=>s.nr===nr);
-  if (found.length===0) return showNotif('Keine Sanktion mit dieser SK Nummer gefunden','error');
-  const s=found[0];
-  document.getElementById('del-title').textContent='Archiv-Sanktion löschen?';
-  document.getElementById('del-msg').textContent=`Sanktion "${nr}" (ID: ${s.id||'?'}) wirklich aus dem Archiv löschen?`;
-  deleteCallback=async()=>{
-    for (const s of found) await deleteDoc(doc(db,'sanktionenArchiv',s._id));
-    await writeLog('sanktion','delete',`Sanktions-Archiv gelöscht: SK-${nr}`,nr);
-    showNotif('Gelöscht','success');
-    await loadSanktionArchiv();
-  };
-  openModal('deleteConfirmModal');
-}
-
-window.archiveSanktion=async function(){
-  const nr=document.getElementById('sank-search').value.trim();
-  if (!nr) return showNotif('Bitte SK Nummer ins Suchfeld eingeben','error');
-  const s=sanktionData.find(x=>x.nr===nr);
-  if (!s) return showNotif('Sanktion nicht gefunden','error');
-  try {
-    await addDoc(collection(db,'sanktionenArchiv'),{...s});
-    await deleteDoc(doc(db,'sanktionen',s._id));
-    await writeLog('sanktion','archiv',`Sanktion SK-${nr} archiviert (ID: ${s.id||''}, ${s.name||''})`,s.id||nr);
-    showNotif('Sanktion archiviert','success');
-    document.getElementById('sank-search').value='';
-    await loadSanktionen(); await loadSanktionArchiv();
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
-
-function renderSanktionen(filtered=null){
-  const list=filtered||sanktionData;
-  const tbody=document.getElementById('sank-tbody');
-  if (!tbody) return;
-  tbody.innerHTML=list.map(s=>`<tr>
-    <td>${s.nr||''}</td><td>${s.id||''}</td><td>${s.name||''}</td>
-    <td>${s.grund||''}</td><td>${s.strafe||''}</td>
-    <td><button class="tool-btn" onclick="showSanktionPage('${s.nr||s._id}')">Zur Sanktion</button></td>
-  </tr>`).join('');
-  // Nach dem Rendern neue Nachrichten prüfen
-  if (currentPage === 10) checkAllSanktionNewMessages();
-}
-
-window.autoGenSkNr = function() {
-  const eingabeId = document.getElementById('sank-id').value.trim();
-  const nrField   = document.getElementById('sank-nr');
-  if (!eingabeId) { nrField.value = ''; return; }
-
-  // Prüfen ob ID im Mitarbeiterregister existiert
-  const maExists = mitarbeiterData.find(m => m.id === eingabeId);
-  if (!maExists) { nrField.value = ''; return; }
-
-  // Alle bestehenden Sanktionen dieser ID zählen (aktiv + archiviert)
-  const aktivCount   = sanktionData.filter(s => s.id === eingabeId).length;
-  const archivCount  = sanktionArchivData.filter(s => s.id === eingabeId).length;
-  const gesamtCount  = aktivCount + archivCount;
-
-  // Nächste freie Nummer: höchste vorhandene Nummer + 1
-  // Alle SK-Nummern dieser ID sammeln um Lücken zu vermeiden
-  const alleNummern = [
-    ...sanktionData.filter(s => s.id === eingabeId),
-    ...sanktionArchivData.filter(s => s.id === eingabeId)
-  ].map(s => {
-    const parts = (s.nr || '').split('-');
-    return parseInt(parts[parts.length - 1]) || 0;
-  });
-  const hoechste = alleNummern.length > 0 ? Math.max(...alleNummern) : 0;
-  const naechste = hoechste + 1;
-
-  nrField.value = `${eingabeId}-${naechste}`;
-}
-
-window.addSanktion=async function(){
-  const eingabeId = document.getElementById('sank-id').value.trim();
-  if (!eingabeId) return showNotif('ID erforderlich','error');
-
-  // Prüfen ob ID im Mitarbeiterregister existiert
-  const maExists = mitarbeiterData.find(m => m.id === eingabeId);
-  if (!maExists) return showNotif(`ID "${eingabeId}" existiert nicht im Mitarbeiterregister!`,'error');
-
-  const nr = document.getElementById('sank-nr').value.trim();
-  if (!nr) return showNotif('SK NR konnte nicht generiert werden','error');
-
-  const data={
-    nr, id: eingabeId,
-    name: document.getElementById('sank-name').value.trim(),
-    grund: document.getElementById('sank-grund').value.trim(),
-    strafe: document.getElementById('sank-strafe').value.trim(),
-    beweise:''
-  };
-  try {
-    await addDoc(collection(db,'sanktionen'), data);
-    await writeLog('sanktion','create',`Sanktion SK-${nr} erstellt für: ${data.name||data.id||'?'} — Grund: ${data.grund||'?'}`,data.id||nr);
-    showNotif('Sanktion erstellt','success');
-    closeModal('addSanktionModal');
-    await loadSanktionen();
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
-
-window.searchSanktion=function(){
-  const q=document.getElementById('sank-search').value.trim().toLowerCase();
-  renderSanktionen(!q?null:sanktionData.filter(s=>(s.nr||'').toLowerCase().includes(q)||(s.id||'').toLowerCase().includes(q)));
-}
-
-window.deleteSanktion=function(){
-  const nr=document.getElementById('sank-search').value.trim();
-  if (!nr) return showNotif('Bitte SK NR eingeben','error');
-  const s=sanktionData.find(x=>x.nr===nr);
-  if (!s) return showNotif('Nicht gefunden','error');
-  document.getElementById('del-title').textContent='Sanktion löschen?';
-  document.getElementById('del-msg').textContent=`Sanktion "${s.nr}" wirklich löschen?`;
-  deleteCallback=async()=>{
-    await deleteDoc(doc(db,'sanktionen',s._id));
-    await writeLog('sanktion','delete',`Sanktion SK-${nr} gelöscht (ID: ${s.id||''}, ${s.name||''})`,s.id||nr);
-    const dp=document.getElementById('sank-detail-'+nr);
-    if (dp) dp.remove();
-    showNotif('Gelöscht','success');
-    await loadSanktionen();
-    showPage(10);
-  };
-  openModal('deleteConfirmModal');
-}
-
-window.showSanktionPage=function(nr){
-  const s=sanktionData.find(x=>x.nr===nr||x._id===nr);
-  if (!s) return;
-  const navButtons=document.querySelector('.nav-buttons');
-  if (navButtons) navButtons.style.display='none';
-  // Aktive Sanktion speichern für Reload-Wiederherstellung
-  try { localStorage.setItem('lspd_active_sank', s.nr); } catch(e) {}
-  let dp=document.getElementById('sank-detail-'+s.nr);
-  if (!dp) {
-    dp=document.createElement('div');
-    dp.id='sank-detail-'+s.nr;
-    dp.className='page';
-    dp.style.cssText='position:fixed;inset:0;z-index:500;background:var(--bg-dark);display:none;flex-direction:column;';
-    dp.innerHTML=`
-      <div style="display:flex;align-items:center;padding:8px 12px;background:var(--bg-panel);border-bottom:1px solid var(--border);flex-shrink:0;">
-        <button class="tool-btn back" onclick="backFromSanktionDetail('${s.nr}')">← BACK</button>
-        <div style="flex:1;text-align:center;font-size:13px;font-weight:700;color:var(--text-dim);letter-spacing:1px;">SK ${s.nr}</div>
-        <button class="tool-btn" onclick="openEditSanktionModal('${s.nr}')">✏️</button>
-      </div>
-      <div class="table-wrapper" style="flex-shrink:0;">
-        <table class="data-table" style="width:100%;">
-          <thead><tr><th>ID</th><th>Name</th><th>Sanktionsgrundbeweise</th><th>Sanktion abgearbeitet (nur Link)</th></tr></thead>
-          <tbody><tr>
-            <td id="sd-id-${s.nr}">${s.detailId||''}</td>
-            <td id="sd-name-${s.nr}">${s.detailName||''}</td>
-            <td id="sd-grundbeweise-${s.nr}">${s.grundbeweise||''}</td>
-            <td id="sd-beweise-${s.nr}">${s.beweise||''}</td>
-          </tr></tbody>
-        </table>
-      </div>
-      <div style="flex:1;display:flex;flex-direction:column;padding:16px;overflow:hidden;min-height:0;">
-        <div style="font-family:'Orbitron',monospace;font-size:12px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);flex-shrink:0;">💬 NACHRICHTEN</div>
-        <div id="sd-chat-${s.nr}" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;min-height:0;"></div>
-        <div style="display:flex;gap:8px;align-items:center;padding-top:12px;flex-shrink:0;border-top:1px solid var(--border);margin-top:8px;">
-          <input id="sd-chat-input-${s.nr}" class="modal-input" placeholder="Nachricht eingeben..." style="flex:1;" onkeydown="if(event.key==='Enter')sendSanktionChat('${s.nr}','${s._id}')">
-          <button class="tool-btn purple" onclick="sendSanktionChat('${s.nr}','${s._id}')" style="white-space:nowrap;">Senden</button>
-        </div>
-      </div>`;
-    document.getElementById('sanktionPages').appendChild(dp);
-  }
-  document.querySelectorAll('#sanktionPages .page').forEach(p=>{p.classList.remove('active');p.style.display='none';});
-  dp.style.display='flex'; dp.classList.add('active');
-  // Als gesehen markieren → roten Rahmen entfernen
-  markSanktionSeen(s.nr);
-  const rows = document.querySelectorAll('#sank-tbody tr');
-  rows.forEach(row => {
-    const cells = row.querySelectorAll('td');
-    if (cells.length > 0 && cells[0].textContent.trim() === s.nr) {
-      row.classList.remove('sank-row-new');
-      const btn = row.querySelector('button');
-      if (btn) btn.innerHTML = 'Zur Sanktion';
+    // Rang-Nummer des eingeloggten Users
+    function myRangNum() {
+      return isHardcodedAdmin() ? 1000 :
+             (myZugriffExists() ? rangToNum(string(myZugriff().rang)) : 0);
     }
-  });
-  // Chat laden
-  loadSanktionChat(s.nr, s._id);
-}
 
-window.backFromSanktionDetail=function(nr){
-  document.querySelectorAll('#sanktionPages .page').forEach(p=>{p.classList.remove('active');p.style.display='none';});
-  try { localStorage.removeItem('lspd_active_sank'); } catch(e) {}
-  showPage(10);
-}
+    // Rang-Nummer eines Ziel-Users
+    function targetRangNum(userId) {
+      return targetZugriffExists(userId) ?
+             rangToNum(string(targetZugriff(userId).rang)) : 0;
+    }
 
-// ===== SANKTION NEUE NACHRICHTEN TRACKING =====
-// Speichert für jede Sanktions-ID (nr) den Timestamp des letzten Besuchs
-// Format: { [nr]: "2024-01-01T12:00:00.000Z" }
-let sanktionSeenTimestamps = {};
+    // Rang-Nummer des neuen Werts beim Schreiben
+    function newRangNum() {
+      return rangToNum(string(request.resource.data.rang));
+    }
 
-function loadSeenTimestamps() {
-  try {
-    const raw = localStorage.getItem('lspd_sank_seen_'+currentUser?.uid);
-    if (raw) sanktionSeenTimestamps = JSON.parse(raw);
-  } catch(e) { sanktionSeenTimestamps = {}; }
-}
+    // Rang-String des eingeloggten Users
+    function myRang() {
+      return myZugriffExists() ? string(myZugriff().rang) : '';
+    }
 
-function markSanktionSeen(nr) {
-  sanktionSeenTimestamps[nr] = new Date().toISOString();
-  try {
-    localStorage.setItem('lspd_sank_seen_'+currentUser?.uid, JSON.stringify(sanktionSeenTimestamps));
-  } catch(e) {}
-}
+    // =========================================================
+    // BERECHTIGUNGS-CHECKS - RANG-BASIERT
+    // =========================================================
 
-// Prüft für alle Sanktionen ob neue Nachrichten vorhanden sind
-// und markiert die Zeilen in der Tabelle entsprechend
-async function checkAllSanktionNewMessages() {
-  for (const s of sanktionData) {
-    if (!s._id || !s.nr) continue;
-    try {
-      const snap = await getDocs(collection(db,'sanktionen',s._id,'nachrichten'));
-      if (snap.empty) continue;
-      const msgs = snap.docs.map(d=>d.data());
-      const lastSeen = sanktionSeenTimestamps[s.nr] || '1970-01-01T00:00:00.000Z';
-      // Nachrichten die NICHT vom aktuellen User sind und neuer als lastSeen
-      const hasNew = msgs.some(m =>
-        m.userUID !== currentUser?.uid &&
-        (m.timestamp||'') > lastSeen
+    // Ist der User freigegeben (jeder gültige freigegebene User)?
+    function isFreigegeben() {
+      return isLoggedIn() && (
+        isHardcodedAdmin()
+        ||
+        (myZugriffExists() &&
+         myZugriff().freigegeben == true &&
+         myRangNum() >= 1)
       );
-      // Zeile markieren
-      const rows = document.querySelectorAll(`#sank-tbody tr`);
-      rows.forEach(row => {
-        const cells = row.querySelectorAll('td');
-        if (cells.length > 0 && cells[0].textContent.trim() === s.nr) {
-          if (hasNew) {
-            row.classList.add('sank-row-new');
-            // Badge auf "Zur Sanktion" Button
-            const btn = row.querySelector('button');
-            if (btn && !btn.querySelector('.sank-new-badge')) {
-              btn.innerHTML = 'Zur Sanktion <span class="sank-new-badge">NEU</span>';
-            }
-          } else {
-            row.classList.remove('sank-row-new');
-            const btn = row.querySelector('button');
-            if (btn) btn.innerHTML = 'Zur Sanktion';
-          }
-        }
-      });
-    } catch(e) { /* ignorieren */ }
-  }
-}
-async function loadSanktionChat(nr, sanktionFirestoreId) {
-  const chatBox = document.getElementById('sd-chat-'+nr);
-  if (!chatBox) return;
-  try {
-    const snap = await getDocs(collection(db, 'sanktionen', sanktionFirestoreId, 'nachrichten'));
-    const msgs = snap.docs.map(d=>({...d.data(),_id:d.id}));
-    msgs.sort((a,b)=>(a.timestamp||'').localeCompare(b.timestamp||''));
-    renderSanktionChat(nr, msgs);
-  } catch(e) { console.warn('[CHAT] Laden fehlgeschlagen:', e.message); }
-}
-
-function renderSanktionChat(nr, msgs) {
-  const chatBox = document.getElementById('sd-chat-'+nr);
-  if (!chatBox) return;
-  if (msgs.length === 0) {
-    chatBox.innerHTML = `<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px;">Noch keine Nachrichten.</div>`;
-    return;
-  }
-  chatBox.innerHTML = msgs.map(m => {
-    const isMe = m.userUID === currentUser?.uid;
-    const ts = m.timestamp ? new Date(m.timestamp).toLocaleString('de-DE') : '';
-    return `<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};">
-      <div style="max-width:75%;background:${isMe?'rgba(139,92,246,0.2)':'rgba(13,21,37,0.9)'};border:1px solid ${isMe?'rgba(139,92,246,0.4)':'var(--border)'};border-radius:8px;padding:8px 12px;">
-        <div style="font-size:10px;color:${isMe?'#a78bfa':'var(--cyan)'};margin-bottom:4px;font-weight:700;">${m.userName||m.userEmail||'?'}</div>
-        <div style="font-size:13px;color:var(--text);word-break:break-word;">${m.text||''}</div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;text-align:right;">${ts}</div>
-      </div>
-    </div>`;
-  }).join('');
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-window.sendSanktionChat = async function(nr, sanktionFirestoreId) {
-  const input = document.getElementById('sd-chat-input-'+nr);
-  if (!input) return;
-  const text = input.value.trim();
-  if (!text) return;
-  const s = sanktionData.find(x=>x.nr===nr||x._id===sanktionFirestoreId);
-  try {
-    const msg = {
-      text,
-      userUID:   currentUser?.uid||'',
-      userEmail: currentUser?.email||'',
-      userName:  currentUser?.displayName||currentUser?.email||'',
-      timestamp: new Date().toISOString(),
-      sanktionNr: nr,
-      sanktionId: s?.id||''
-    };
-    await addDoc(collection(db,'sanktionen',sanktionFirestoreId,'nachrichten'), msg);
-    await writeLog('sanktion','update',`Nachricht in Sanktion SK-${nr} geschrieben: "${text}"`, s?.id||nr);
-    input.value = '';
-    await loadSanktionChat(nr, sanktionFirestoreId);
-  } catch(e) { showNotif('Fehler beim Senden: '+e.message,'error'); }
-}
-
-window.openEditSanktionModal=function(nr){
-  const s=sanktionData.find(x=>x.nr===nr);
-  if (!s) return;
-  const modal=document.createElement('div');
-  modal.className='modal-overlay open';
-  modal.id='tmp-edit-modal';
-  modal.innerHTML=`<div class="modal">
-    <div class="modal-title">Sanktion Bearbeiten</div>
-    <div class="modal-field"><div class="modal-label">ID (Eigene ID)</div><input class="modal-input" autocomplete="off" id="se-id" placeholder="Eigene ID"></div>
-    <div class="modal-field"><div class="modal-label">Name (Eigener Name)</div><input class="modal-input" autocomplete="off" id="se-name" placeholder="Eigener Name"></div>
-    <div class="modal-field"><div class="modal-label">Sanktionsgrundbeweise</div><input class="modal-input" autocomplete="off" id="se-grundbeweise" placeholder="Sanktionsgrundbeweise"></div>
-    <div class="modal-btns">
-      <button class="btn-modal gray" onclick="document.getElementById('tmp-edit-modal').remove()">Abbrechen</button>
-      <button class="btn-modal blue" onclick="saveSanktionEdit('${s._id}','${nr}')">Speichern</button>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-  setTimeout(()=>{
-    const idEl         = document.getElementById('se-id');
-    const nameEl       = document.getElementById('se-name');
-    const grundEl      = document.getElementById('se-grundbeweise');
-    if (idEl)    idEl.value    = s.detailId||'';
-    if (nameEl)  nameEl.value  = s.detailName||'';
-    if (grundEl) grundEl.value = s.grundbeweise||'';
-  },30);
-}
-
-window.saveSanktionEdit=async function(docId,nr){
-  const detailId      = document.getElementById('se-id').value;
-  const detailName    = document.getElementById('se-name').value;
-  const grundbeweise  = document.getElementById('se-grundbeweise').value;
-  const s = sanktionData.find(x=>x._id===docId);
-  const changes = [];
-  if (s) {
-    if ((s.detailId||'') !== detailId) changes.push(`ID: "${s.detailId||'–'}" → "${detailId||'–'}"`);
-    if ((s.detailName||'') !== detailName) changes.push(`Name: "${s.detailName||'–'}" → "${detailName||'–'}"`);
-    if ((s.grundbeweise||'') !== grundbeweise) changes.push(`Sanktionsgrundbeweise: "${s.grundbeweise||'–'}" → "${grundbeweise||'–'}"`);
-  }
-  const detailStr = changes.length > 0 ? changes.join(' | ') : 'keine Änderungen';
-  try {
-    await updateDoc(doc(db,'sanktionen',docId),{detailId, detailName, grundbeweise});
-    await writeLog('sanktion','update',`Sanktion SK-${nr} bearbeitet — ${detailStr}`,detailId||nr);
-    const idEl    = document.getElementById('sd-id-'+nr);
-    if (idEl) idEl.textContent = detailId;
-    const nameEl  = document.getElementById('sd-name-'+nr);
-    if (nameEl) nameEl.textContent = detailName;
-    const grundEl = document.getElementById('sd-grundbeweise-'+nr);
-    if (grundEl) grundEl.textContent = grundbeweise;
-    document.getElementById('tmp-edit-modal').remove();
-    showNotif('Gespeichert','success');
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
-
-// ===== SK RULES =====
-async function loadSKRules(){
-  const snap=await getDocs(collection(db,'skRules'));
-  skRules=snap.docs.map(d=>({...d.data(),_id:d.id}));
-  renderSKRules();
-}
-
-function updateAllModalHeaders(){
-  skHeaders.forEach((h,i)=>{
-    ['ar-lbl-','er-lbl-'].forEach(pfx=>{
-      const el=document.getElementById(pfx+i);
-      if (el) el.textContent=h;
-    });
-  });
-}
-
-async function loadSKHeaders(){
-  const snap=await getDoc(doc(db,'skConfig','headers'));
-  if (snap.exists()) skHeaders=snap.data().headers||skHeaders;
-  updateSKHeaders(); updateAllModalHeaders();
-}
-
-function updateSKHeaders(){
-  skHeaders.forEach((h,i)=>{ const el=document.getElementById('sk-h'+i); if(el) el.textContent=h; });
-}
-
-function renderSKRules(filtered=null){
-  let list=filtered?[...filtered]:[...skRules];
-  list.sort((a,b)=>{
-    const na=parseFloat((a.para||'0').replace('§','').trim())||0;
-    const nb=parseFloat((b.para||'0').replace('§','').trim())||0;
-    return na-nb;
-  });
-  const tbody=document.getElementById('sk-tbody');
-  if (!tbody) return;
-  tbody.innerHTML=list.map(r=>`<tr>
-    <td>${r.para||''}</td><td>${r.def||''}</td>
-    ${[0,1,2,3,4,5,6,7,8,9,10,11,12].map(i=>`<td>${r['v'+i]||''}</td>`).join('')}
-  </tr>`).join('');
-}
-
-window.addRule=async function(){
-  const para=document.getElementById('ar-para').value.trim();
-  if (!para) return showNotif('§ erforderlich','error');
-  const data={para, def:document.getElementById('ar-def').value.trim()};
-  for(let i=0;i<=12;i++) data['v'+i]=document.getElementById('ar-'+i).value.trim();
-  try {
-    await addDoc(collection(db,'skRules'), data);
-    await writeLog('sk','create',`SK Regel ${para} hinzugefügt: ${data.def||''}`,para);
-    showNotif('Regel hinzugefügt','success');
-    closeModal('addRuleModal');
-    await loadSKRules();
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
-
-window.searchRule=function(){
-  const q=document.getElementById('sk-search').value.trim();
-  renderSKRules(!q?null:skRules.filter(r=>(r.para||'').includes(q)||(r.def||'').toLowerCase().includes(q.toLowerCase())));
-}
-
-window.openEditRuleModal=function(){
-  openModal('editHeaderModal');
-  setTimeout(()=>{
-    const grid=document.getElementById('ehm-grid');
-    grid.innerHTML='';
-    skHeaders.forEach((h,i)=>{
-      const d=document.createElement('div');
-      d.className='modal-field';
-      d.innerHTML=`<div class="modal-label">Spalte ${i} umbenennen</div><input class="modal-input" autocomplete="off" id="eh-${i}" placeholder="${h}">`;
-      grid.appendChild(d);
-      setTimeout(()=>{ const el=document.getElementById('eh-'+i); if(el) el.value=h; },10);
-    });
-  },30);
-}
-
-window.saveHeader=async function(){
-  skHeaders=Array.from({length:13},(_,i)=>document.getElementById('eh-'+i)?.value.trim()||String(i));
-  await setDoc(doc(db,'skConfig','headers'),{headers:skHeaders});
-  await writeLog('sk','update',`SK Spaltenüberschriften geändert: ${skHeaders.join(', ')}`,'config');
-  updateSKHeaders(); updateAllModalHeaders();
-  closeModal('editHeaderModal');
-  showNotif('Spalten gespeichert','success');
-}
-
-window.saveRule=async function(){
-  const idx=document.getElementById('er-idx').value;
-  if (!idx) return;
-  const rule=skRules.find(r=>r._id===idx);
-  if (!rule) return;
-  const data={para:rule.para, def:document.getElementById('er-def').value.trim()};
-  for(let i=0;i<=12;i++) data['v'+i]=document.getElementById('er-'+i).value.trim();
-  // Geänderte Felder ermitteln
-  const changes=[];
-  if ((rule.def||'')!==data.def) changes.push(`Regeldefinition: "${rule.def||'–'}" → "${data.def||'–'}"`);
-  for(let i=0;i<=12;i++){
-    const alt=rule['v'+i]||''; const neu=data['v'+i]||'';
-    if (alt!==neu) changes.push(`${skHeaders[i]||i}: "${alt||'–'}" → "${neu||'–'}"`);
-  }
-  const detailStr=changes.length>0?changes.join(' | '):'keine Änderungen';
-  try {
-    await updateDoc(doc(db,'skRules',idx), data);
-    await writeLog('sk','update',`SK Regel ${rule.para} bearbeitet — ${detailStr}`,rule.para);
-    showNotif('Regel gespeichert','success');
-    closeModal('editRuleModal');
-    await loadSKRules();
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
-}
-
-window.openEditRuleBySearch=function(){
-  const q=document.getElementById('sk-search').value.trim();
-  const rule=skRules.find(r=>(r.para||'').includes(q)||(r.def||'').toLowerCase().includes(q.toLowerCase()));
-  if (!rule) return showNotif('Nicht gefunden','error');
-  openModal('editRuleModal');
-  setTimeout(()=>{
-    const fill=(elId,val)=>{ const el=document.getElementById(elId); if(el) el.value=val!==undefined&&val!==null?String(val):''; };
-    fill('er-idx',rule._id); fill('er-para',rule.para); fill('er-def',rule.def);
-    for(let i=0;i<=12;i++){
-      fill('er-'+i,rule['v'+i]);
-      const lbl=document.getElementById('er-lbl-'+i);
-      if(lbl) lbl.textContent=skHeaders[i]||String(i);
     }
-  },30);
-}
 
-window.deleteRuleBySearch=function(){
-  const q=document.getElementById('sk-search').value.trim();
-  if (!q) return showNotif('Bitte § ins Suchfeld eingeben','error');
-  const rule=skRules.find(r=>(r.para||'').includes(q)||(r.def||'').toLowerCase().includes(q.toLowerCase()));
-  if (!rule) return showNotif('Regel nicht gefunden','error');
-  document.getElementById('del-title').textContent='Regel wirklich löschen?';
-  document.getElementById('del-msg').textContent=`Möchtest du Regel "${rule.para} — ${rule.def||''}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`;
-  document.getElementById('del-confirm-btn').textContent='Ja, wirklich löschen';
-  deleteCallback=async()=>{
-    await deleteDoc(doc(db,'skRules',rule._id));
-    await writeLog('sk','delete',`SK Regel ${rule.para} gelöscht: ${rule.def||''}`,rule.para);
-    showNotif('Regel gelöscht','success');
-    document.getElementById('sk-search').value='';
-    await loadSKRules();
-  };
-  openModal('deleteConfirmModal');
-}
+    // Kann schreibend eingreifen? (Leaderschaft=998, Ersteller=1000, Admin=999)
+    function canEdit() {
+      return isLoggedIn() && (
+        isHardcodedAdmin() ||
+        (myZugriffExists() &&
+         myZugriff().freigegeben == true &&
+         myRangNum() >= 998)
+      );
+    }
 
-// ===== DELETE CONFIRM =====
-window.confirmDelete=async function(){
-  if (deleteCallback) { await deleteCallback(); deleteCallback=null; }
-  closeModal('deleteConfirmModal');
-  document.getElementById('del-confirm-btn').textContent='Ja, Löschen';
-  document.getElementById('del-title').textContent='Wirklich löschen?';
-}
+    // Ist Ersteller? (höchste Stufe)
+    function isErsteller() {
+      return isLoggedIn() && (
+        isHardcodedAdmin() ||
+        (myZugriffExists() && myZugriff().rang == 'Ersteller')
+      );
+    }
 
-// ===== HELPERS =====
-window.updateDivision=function(){
-  const r=parseInt(document.getElementById('ma-rank').value);
-  const div=getDivisionLabel(r);
-  document.getElementById('ma-div').value=div.label;
-}
+    // Ist Admin? (kann alles außer löschen/bearbeiten von Ersteller)
+    function isAdmin() {
+      return isLoggedIn() && (
+        myZugriffExists() &&
+        myZugriff().freigegeben == true &&
+        myZugriff().rang == 'Admin'
+      );
+    }
 
-function getDivisionLabel(rank){
-  const r=parseInt(rank);
-  if (r===1) return {label:'Suspended',cls:'div-suspended'};
-  if (r===2) return {label:'Cadet',cls:'div-cadet'};
-  if (r===3) return {label:'TOW Officer',cls:'div-tow'};
-  if (r===4) return {label:'Rookie',cls:'div-rookie'};
-  if (r>=5&&r<=10) return {label:'Officer',cls:'div-officer'};
-  if (r>=11&&r<=16) return {label:'Command',cls:'div-command'};
-  if (r===17) return {label:'Media',cls:'div-media'};
-  if (r>=18&&r<=22) return {label:'Department',cls:'div-department'};
-  if (r===23||r===24) return {label:'High Command',cls:'div-highcommand'};
-  if (r===25||r===26) return {label:'Department',cls:'div-department'};
-  if (r===27) return {label:'High Command Lead',cls:'div-hclead'};
-  if (r===28||r===29) return {label:'Leaderschaft',cls:'div-leadership'};
-  if (r===30) return {label:'Leader',cls:'div-leader'};
-  return {label:'',cls:''};
-}
+    // Ist Leaderschaft?
+    function isLeaderschaft() {
+      return isLoggedIn() && (
+        myZugriffExists() &&
+        myZugriff().freigegeben == true &&
+        myZugriff().rang == 'Leaderschaft'
+      );
+    }
 
-// ===== RANG PERMISSIONS =====
-function rangNumFromStr(r){
-  if (r==='Ersteller') return 1000;
-  if (r==='Leaderschaft') return 998;
-  if (r==='Admin') return 999;
-  const n=parseInt(r);
-  return isNaN(n)?0:n;
-}
+    // Rang PA (6) - Personalakte: nur Ausbildungen bearbeiten
+    function isPA() {
+      return isLoggedIn() &&
+             myZugriffExists() &&
+             myZugriff().freigegeben == true &&
+             myRang() == '6';
+    }
 
-function applyRangPermissions(rang){
-  currentRang=rang;
-  currentRangNum=rangNumFromStr(rang);
-  const rn=currentRangNum;
-  const isErsteller = rang==='Ersteller';
+    // Rang IU (7) - Interne Untersuchung: Sanktionen erstellen/bearbeiten
+    function isIU() {
+      return isLoggedIn() &&
+             myZugriffExists() &&
+             myZugriff().freigegeben == true &&
+             myRang() == '7';
+    }
 
-  // NAV BUTTONS
-  const showEl=(id,vis)=>{ const el=document.getElementById(id); if(el) el.style.display=vis?'':'none'; };
-  showEl('nav-p2',true);
-  showEl('nav-p3',true);
-  showEl('nav-p4',true);
-  showEl('nav-p5',true);
-  showEl('nav-p6',true);
-  showEl('nav-p7', rn===6||rn===9||rn===10||rn>=998);
-  showEl('nav-p8', rn===9||rn===10||rn>=998);
-  // Aktivitätslog NUR für Ersteller
-  showEl('nav-p20', isErsteller);
+    // Rang IU-Leitung (8) - Sanktionen erstellen/bearbeiten/archivieren
+    function isIULeitung() {
+      return isLoggedIn() &&
+             myZugriffExists() &&
+             myZugriff().freigegeben == true &&
+             myRang() == '8';
+    }
 
-  // Force page 2 if not allowed
-  const allowedPages=getAllowedPages(rn,isErsteller);
-  if (!allowedPages.includes(currentPage)) showPage(2);
+    // Rang HR (9) - Human Resources: Mitarbeiter verwalten, freigeben
+    function isHR() {
+      return isLoggedIn() &&
+             myZugriffExists() &&
+             myZugriff().freigegeben == true &&
+             myRang() == '9';
+    }
 
-  setTimeout(()=>{
-    // PAGE 6 Buttons
-    const p6btns=document.querySelectorAll('#page6 .toolbar .tool-btn');
-    p6btns.forEach(btn=>{
-      const txt=btn.textContent.trim();
-      // 🔍 Lupe: immer sichtbar
-      if (txt==='🔍') { btn.style.display=''; return; }
-      // 📁 Ordner: nur ab Rang 7+8 und Ersteller/Leaderschaft/Admin (nicht Rang 1, 6, 9, 10)
-      if (txt==='📁') { btn.style.display=(rn===1||rn===6||rn===9||rn===10)?'none':''; return; }
-      if (rn===1||rn===6) { btn.style.display='none'; }
-      else if (rn===7||rn===8) { btn.style.display='none'; }
-      else if (rn===9||rn===10) { btn.style.display='none'; }
-      else if (rang==='Admin') { btn.style.display='none'; }
-      else if (rang==='Leaderschaft') { btn.style.display=(btn.classList.contains('red')&&txt==='✕')?'none':''; }
-      else { btn.style.display=''; } // Ersteller
-    });
-    document.getElementById('sk-search').style.display='';
+    // Rang HR-Leitung (10) - Vollzugriff HR + alle MA-Verwaltung
+    function isHRLeitung() {
+      return isLoggedIn() &&
+             myZugriffExists() &&
+             myZugriff().freigegeben == true &&
+             myRang() == '10';
+    }
 
-    // PAGE 7 Buttons
-    const p7btns=document.querySelectorAll('#page7 .toolbar .tool-btn');
-    p7btns.forEach(btn=>{
-      const txt=btn.textContent.trim();
-      if (rn===6) { btn.style.display=['🔍','📋'].includes(txt)?'':'none'; }
-      else if (rn===9) {
-        if (btn.classList.contains('red')&&txt==='＋') btn.style.display='';
-        else btn.style.display=['🔍','📁','✏️'].includes(txt)?'':'none';
+    // =========================================================
+    // SCHUTZ-CHECKS
+    // =========================================================
+
+    // Darf ich diesen User bearbeiten? (höherer Rang, nicht sich selbst)
+    function canEditTarget(userId) {
+      return request.auth.uid != userId &&
+             (isHardcodedAdmin() || myRangNum() > targetRangNum(userId));
+    }
+
+    // Darf ich diesen Rang vergeben? (nur niedrigere Ränge als der eigene)
+    function canAssignRang() {
+      return isHardcodedAdmin() || newRangNum() < myRangNum();
+    }
+
+    // Ist Ziel-User ein Ersteller? (darf niemals bearbeitet werden)
+    function targetIsErsteller(userId) {
+      return targetZugriffExists(userId) &&
+             targetZugriff(userId).rang == 'Ersteller';
+    }
+
+    // Wurde nur das freigegeben-Feld geändert?
+    function onlyFreigebenChanged() {
+      return request.resource.data.diff(resource.data)
+             .affectedKeys().hasOnly(['freigegeben']);
+    }
+
+    // Wurde nur freigegeben (und optional rang='1') geändert?
+    function onlyFreigebenOrRang1Changed() {
+      return (
+        request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly(['freigegeben'])
+      ) || (
+        request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly(['freigegeben', 'rang']) &&
+        request.resource.data.rang == '1'
+      );
+    }
+
+    // Wurde nur das beweise-Feld geändert? (Mitarbeiter reichen Beweise ein)
+    function onlyBeweiseChanged() {
+      return request.resource.data.diff(resource.data)
+             .affectedKeys().hasOnly(['beweise']);
+    }
+
+    // Wurde nur die UID verknüpft? (automatische UID-Migration)
+    function onlyUidChanged() {
+      return request.resource.data.diff(resource.data)
+             .affectedKeys().hasOnly(['uid']);
+    }
+
+    // =========================================================
+    // BERECHTIGUNGEN NACH RANG-DEFINITION (Seite 8 der App)
+    // =========================================================
+    //
+    // MITARBEITER (1):  Lesen: 2,3,4,5,6 | Schreiben: nichts
+    // PA (6):           Lesen: 2-7,9,19  | Schreiben: nur ausbildungen in mitarbeiter
+    // IU (7):           Lesen: 2-6,10,12 | Schreiben: sanktionen create/update/archiv
+    // IU-LEITUNG (8):   Lesen: 2-6,10,12 | Schreiben: sanktionen create/update/archiv + SK-Header lesen
+    // HR (9):           Lesen: 2-9,11,19 | Schreiben: mitarbeiter create, archiv, freigaben, entlassungsarchiv
+    // HR-LEITUNG (10):  Lesen: alle       | Schreiben: mitarbeiter alle, freigaben, entlassungsarchiv
+    // ADMIN (999):      Lesen: alle       | Schreiben: NUR LESEN - keine Änderungen
+    // LEADERSCHAFT(998):Lesen: alle       | Schreiben: alles außer löschen
+    // ERSTELLER(1000):  Alles erlaubt
+    //
+    // SICHERHEITSREGEL: Rang kann NIEMALS selbst erhöht werden.
+    // Niemand kann sich selbst einen höheren Rang geben.
+    // =========================================================
+
+
+    // =========================================================
+    // COLLECTION: zugriff
+    // Wer darf was mit Zugriffsrechten machen?
+    // =========================================================
+    match /zugriff/{userId} {
+
+      // Lesen: Alle eingeloggten User (für Auth-Check beim Login)
+      allow read: if isLoggedIn();
+
+      // Erstellen:
+      // a) canEdit() legt neuen User mit rang='1' und freigegeben=false an
+      // b) User verknüpft sein eigenes Dokument mit seiner UID (UID-Migration)
+      allow create: if isLoggedIn() && (
+        (
+          canEdit() &&
+          request.resource.data.rang == '1' &&
+          request.resource.data.freigegeben == false
+        )
+        ||
+        (
+          // Selbst-Registrierung: UID + Email müssen übereinstimmen
+          request.resource.data.uid == request.auth.uid &&
+          request.resource.data.email == request.auth.token.email
+        )
+      );
+
+      // Aktualisieren:
+      // a) canEdit() mit Hierarchie-Check (nicht Ersteller bearbeiten)
+      // b) HR/HR-Leitung darf nur freigegeben umschalten
+      // c) Jeder darf seine eigene UID-Verknüpfung setzen (Migration)
+      allow update: if (
+          canEdit()
+          && canEditTarget(userId)
+          && canAssignRang()
+          && !targetIsErsteller(userId)
+        )
+        ||
+        (
+          (isHR() || isHRLeitung())
+          && onlyFreigebenOrRang1Changed()
+          && !targetIsErsteller(userId)
+          && request.auth.uid != userId
+        )
+        ||
+        (
+          // Automatische UID-Verknüpfung beim ersten Login
+          isLoggedIn()
+          && resource.data.email == request.auth.token.email
+          && onlyUidChanged()
+          && request.resource.data.uid == request.auth.uid
+        );
+
+      // Löschen:
+      // a) canEdit() mit Hierarchie-Check
+      // b) User löscht sein eigenes Dokument (außer Ersteller)
+      allow delete: if (
+          canEdit()
+          && canEditTarget(userId)
+          && !targetIsErsteller(userId)
+        )
+        ||
+        (
+          isLoggedIn()
+          && resource.data.email == request.auth.token.email
+          && resource.data.rang != 'Ersteller'
+        );
+    }
+
+
+    // =========================================================
+    // COLLECTION: anfragen
+    // Registrierungsanfragen von neuen Usern
+    // =========================================================
+    match /anfragen/{userId} {
+
+      // Erstellen: Nur der User selbst, mit freigegeben=false zwingend
+      allow create: if isLoggedIn()
+        && request.auth.uid == userId
+        && request.resource.data.freigegeben == false
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        // SICHERHEIT: Rang kann beim Erstellen nicht selbst gesetzt werden
+        && request.resource.data.rang == '1';
+
+      // Lesen: canEdit, HR, HR-Leitung oder der User selbst
+      allow read: if canEdit() || isHR() || isHRLeitung()
+        || (isLoggedIn() && request.auth.uid == userId);
+
+      // Aktualisieren: canEdit oder HR/HR-Leitung (nur freigegeben-Feld)
+      allow update: if canEdit()
+        ||
+        (
+          (isHR() || isHRLeitung())
+          && onlyFreigebenOrRang1Changed()
+          && request.auth.uid != userId
+        );
+
+      // Löschen: canEdit oder der User selbst (Anfrage zurückziehen)
+      allow delete: if canEdit() ||
+        (isLoggedIn() && request.auth.uid == userId);
+    }
+
+
+    // =========================================================
+    // COLLECTION: mitarbeiter
+    // Das Mitarbeiterregister
+    // =========================================================
+    match /mitarbeiter/{docId} {
+
+      // Lesen: Alle freigegebenen User (alle Ränge ab 1)
+      allow read: if isFreigegeben();
+
+      // Erstellen:
+      // - canEdit (Leaderschaft/Ersteller/Admin) ODER
+      // - HR/HR-Leitung (für neue freigegebene Mitarbeiter)
+      allow create: if canEdit()
+        || (isLoggedIn() &&
+            myZugriffExists() &&
+            myZugriff().freigegeben == true &&
+            (myRang() == '9' || myRang() == '10'));
+
+      // Aktualisieren:
+      // - canEdit (Leaderschaft/Ersteller) ODER
+      // - PA darf NUR ausbildungen-Feld ändern ODER
+      // - HR/HR-Leitung darf Mitarbeiterdaten ändern (außer rang im zugriff)
+      allow update: if canEdit()
+        || (isPA() &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['ausbildungen']))
+        || (isLoggedIn() &&
+            myZugriffExists() &&
+            myZugriff().freigegeben == true &&
+            (myRang() == '9' || myRang() == '10') &&
+            // HR darf keine ausbildungen-only-Änderung machen (das ist PA)
+            // aber alle anderen Felder
+            !request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['rang'])); // Rang des Mitarbeiters darf HR nicht allein ändern
+
+      // Löschen: Nur canEdit
+      allow delete: if canEdit();
+    }
+
+
+    // =========================================================
+    // COLLECTION: archiv
+    // Archivierte Mitarbeiter
+    // =========================================================
+    match /archiv/{docId} {
+
+      // Lesen: Alle freigegebenen User (PA, HR etc. müssen Archiv sehen)
+      allow read: if isFreigegeben();
+
+      // Schreiben: canEdit + HR + HR-Leitung
+      // (HR muss archivieren können)
+      allow create: if canEdit()
+        || (isLoggedIn() &&
+            myZugriffExists() &&
+            myZugriff().freigegeben == true &&
+            (myRang() == '9' || myRang() == '10'));
+
+      allow update: if canEdit();
+
+      allow delete: if canEdit()
+        || (isLoggedIn() &&
+            myZugriffExists() &&
+            myZugriff().freigegeben == true &&
+            (myRang() == '9' || myRang() == '10'));
+    }
+
+
+    // =========================================================
+    // COLLECTION: sanktionen
+    // Aktive Sanktionen
+    // =========================================================
+    match /sanktionen/{docId} {
+
+      // Lesen: Alle freigegebenen User
+      allow read: if isFreigegeben();
+
+      // Erstellen: canEdit ODER IU ODER IU-Leitung
+      allow create: if canEdit() || isIU() || isIULeitung();
+
+      // Aktualisieren:
+      // - canEdit ODER IU ODER IU-Leitung (volle Bearbeitung)
+      // - Jeder freigegebene User darf NUR beweise-Feld setzen (Beweise einreichen)
+      allow update: if canEdit()
+        || isIU()
+        || isIULeitung()
+        || (isFreigegeben() && onlyBeweiseChanged());
+
+      // Löschen: Nur canEdit
+      allow delete: if canEdit();
+
+      // -------------------------------------------------------
+      // SUBCOLLECTION: nachrichten
+      // Chat-Nachrichten zu einer Sanktion
+      // -------------------------------------------------------
+      match /nachrichten/{msgId} {
+
+        // Lesen: Alle freigegebenen User
+        allow read: if isFreigegeben();
+
+        // Erstellen: Jeder freigegebene User (mit korrekter UID)
+        allow create: if isFreigegeben()
+          && request.resource.data.userUID == request.auth.uid
+          // Nachricht darf nicht leer sein
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0;
+
+        // Aktualisieren: NIEMALS (Nachrichten sind unveränderlich)
+        allow update: if false;
+
+        // Löschen: Nur canEdit
+        allow delete: if canEdit();
       }
-      else if (rn===10) { btn.style.display=(btn.classList.contains('red')&&txt!=='＋')?'none':''; }
-      else if (rang==='Admin') { btn.style.display=txt==='🔍'?'':'none'; }
-      else if (rang==='Leaderschaft') { btn.style.display=(btn.classList.contains('red')&&txt==='✕')?'none':''; }
-      else { btn.style.display=rn>=1000?'':'none'; }
-    });
-    const p7search=document.getElementById('ma-search');
-    if (p7search) p7search.style.display=(rn===6||rn===9||rn===10||rn>=998)?'':'none';
+    }
 
-    // PAGE 8 Buttons
-    const p8btns=document.querySelectorAll('#page8 .toolbar .tool-btn');
-    p8btns.forEach(btn=>{
-      const txt=btn.textContent.trim();
-      if (rn===9) { btn.style.display=txt==='🔍'?'':'none'; }
-      else if (rn===10) { btn.style.display=(btn.classList.contains('red')&&txt==='✕')?'none':''; }
-      else if (rang==='Admin') { btn.style.display=txt==='🔍'?'':'none'; }
-      else if (rang==='Leaderschaft') { btn.style.display=(btn.classList.contains('red')&&txt==='✕')?'none':''; }
-      else { btn.style.display=''; }
-    });
-    const p8search=document.getElementById('zug-search');
-    if (p8search) p8search.style.display=(rn===9||rn===10||rn>=998)?'':'none';
 
-    // PAGE 9 Buttons
-    const p9btns=document.querySelectorAll('#page9 .toolbar .tool-btn');
-    p9btns.forEach(btn=>{
-      const txt=btn.textContent.trim();
-      if (rn===6||rn===9||rn===10||rang==='Admin') { btn.style.display=(txt.includes('BACK')||txt==='🔍')?'':'none'; }
-      else if (rang==='Leaderschaft') { btn.style.display=(btn.classList.contains('red')&&txt==='✕')?'none':''; }
-      else { btn.style.display=''; }
-    });
-    const p9search=document.getElementById('arch-search');
-    if (p9search) p9search.style.display=(rn===6||rn===9||rn===10||rn>=998)?'':'none';
+    // =========================================================
+    // COLLECTION: sanktionenArchiv
+    // Archivierte Sanktionen
+    // =========================================================
+    match /sanktionenArchiv/{docId} {
 
-    // PAGE 10 Buttons
-    const p10btns=document.querySelectorAll('#page10 .toolbar .tool-btn');
-    p10btns.forEach(btn=>{
-      const txt=btn.textContent.trim();
-      if (rn===7||rn===8) { btn.style.display=(btn.classList.contains('red')&&txt==='✕')?'none':''; }
-      else if (rn===9||rn===10) { btn.style.display=(btn.classList.contains('red')&&txt==='✕')?'none':''; }
-      else if (rang==='Admin') { btn.style.display=(txt.includes('BACK')||txt==='🔍'||txt==='📁')?'':'none'; }
-      else if (rang==='Leaderschaft') { btn.style.display=(btn.classList.contains('red')&&txt==='✕')?'none':''; }
-      else { btn.style.display=''; }
-    });
-    const p10search=document.getElementById('sank-search');
-    if (p10search) p10search.style.display=(rn===7||rn===8||rn===9||rn===10||rn>=998)?'':'none';
+      // Lesen: Alle freigegebenen User
+      allow read: if isFreigegeben();
 
-    // PAGE 12 Buttons
-    const p12btns=document.querySelectorAll('#page12 .toolbar .tool-btn');
-    p12btns.forEach(btn=>{
-      const txt=btn.textContent.trim();
-      if (rn===7||rn===8||rang==='Admin') { btn.style.display=(txt.includes('BACK')||txt==='🔍')?'':'none'; }
-      else if (rang==='Leaderschaft') { btn.style.display=(btn.classList.contains('red')&&txt==='✕')?'none':''; }
-      else { btn.style.display=''; }
-    });
-    const p12search=document.getElementById('sank-archiv-search');
-    if (p12search) p12search.style.display=(rn===7||rn===8||rn>=998)?'':'none';
+      // Erstellen/Aktualisieren: canEdit ODER IU ODER IU-Leitung
+      allow create, update: if canEdit() || isIU() || isIULeitung();
 
-    // Freigabe-Dropdowns: nur HR (9/10) und höher dürfen ändern
-    document.querySelectorAll('select.freigabe-select').forEach(sel=>{
-      sel.disabled=!(rn===9||rn===10||rn>=998);
-      sel.style.opacity=sel.disabled?'0.4':'1';
-    });
-  },80);
-}
+      // Löschen: Nur canEdit
+      allow delete: if canEdit();
+    }
 
-function getAllowedPages(rn, isErsteller=false){
-  if (rn===1) return [2,3,4,5,6];
-  if (rn===6) return [2,3,4,5,6,7,9,19];
-  if (rn===7||rn===8) return [2,3,4,5,6,10,12];
-  if (rn===9) return [2,3,4,5,6,7,8,9,11,19];
-  if (rn===10) return [2,3,4,5,6,7,8,9,11,19];
-  if (rn===999) return [2,3,4,5,6,7,8,9,10,11,12,19]; // Admin
-  if (rn>=998) {
-    const base=[2,3,4,5,6,7,8,9,10,11,12,19];
-    if (isErsteller) base.push(20);
-    return base;
+
+    // =========================================================
+    // COLLECTION: skRules
+    // Sanktionskatalog-Regeln
+    // =========================================================
+    match /skRules/{docId} {
+
+      // Lesen: Alle freigegebenen User (Mitarbeiter müssen SK lesen können)
+      allow read: if isFreigegeben();
+
+      // Schreiben: Nur IU-Leitung und höher
+      // IU darf SK NUR lesen, nicht schreiben
+      // IU-Leitung darf SK-Regeln hinzufügen/bearbeiten
+      allow create, update: if canEdit() || isIULeitung();
+
+      // Löschen: Nur canEdit (Leaderschaft/Ersteller)
+      allow delete: if canEdit();
+    }
+
+    // SK-Konfiguration (Spaltenüberschriften)
+    match /skConfig/{docId} {
+
+      // Lesen: Alle freigegebenen User
+      allow read: if isFreigegeben();
+
+      // Schreiben: Nur IU-Leitung und höher
+      allow write: if canEdit() || isIULeitung();
+    }
+
+
+    // =========================================================
+    // COLLECTION: rangHistorie
+    // Protokoll aller Rang-Änderungen
+    // =========================================================
+    match /rangHistorie/{docId} {
+
+      // Lesen: Alle freigegebenen User
+      allow read: if isFreigegeben();
+
+      // Erstellen: Wer Mitarbeiter bearbeiten darf
+      allow create: if canEdit()
+        || (isLoggedIn() &&
+            myZugriffExists() &&
+            myZugriff().freigegeben == true &&
+            (myRang() == '9' || myRang() == '10'));
+
+      // Aktualisieren: NIEMALS (Historie ist unveränderlich)
+      allow update: if false;
+
+      // Löschen: Nur Ersteller
+      allow delete: if isErsteller();
+    }
+
+
+    // =========================================================
+    // COLLECTION: aktivitaetslog
+    // Vollständiges Audit-Protokoll
+    // =========================================================
+    match /aktivitaetslog/{docId} {
+
+      // Lesen: NUR Ersteller
+      allow read: if isErsteller();
+
+      // Erstellen: Alle freigegebenen User (Log-Einträge schreiben)
+      // SICHERHEIT: Jeder kann seinen eigenen Aktion loggen
+      allow create: if isFreigegeben()
+        // UID muss korrekt sein
+        && request.resource.data.userUID == request.auth.uid;
+
+      // Aktualisieren: NIEMALS (Logs sind unveränderlich)
+      allow update: if false;
+
+      // Löschen: Nur Ersteller
+      allow delete: if isErsteller();
+    }
+
+
+    // =========================================================
+    // COLLECTION: entlassungsarchiv
+    // Gruppen von entlassenen Mitarbeitern
+    // =========================================================
+    match /entlassungsarchiv/{docId} {
+
+      // Lesen: Alle freigegebenen User (PA, HR etc. sollen sehen können)
+      allow read: if isFreigegeben();
+
+      // Erstellen: canEdit ODER HR ODER HR-Leitung
+      allow create: if canEdit() || isHR() || isHRLeitung();
+
+      // Aktualisieren: Nur canEdit
+      allow update: if canEdit();
+
+      // Löschen: Nur canEdit
+      allow delete: if canEdit();
+    }
+
+
+    // =========================================================
+    // SICHERHEITSNETZ: Alle anderen Collections sperren
+    // =========================================================
+    match /{document=**} {
+      allow read, write: if isHardcodedAdmin();
+    }
   }
-  return [2];
 }
-
-function checkVoraussetzung(ma){
-  const r=parseInt(ma.rank);
-  const ausb=ma.ausbildungen||{};
-  const lastRankup=ma.rankup?new Date(ma.rankup):null;
-  const now=new Date();
-  const daysSince=lastRankup?Math.floor((now-lastRankup)/(1000*60*60*24)):0;
-  const weeks2=daysSince>=14;
-  const month1=daysSince>=30;
-  const allAusb=['GA','EHK','ES','OP','OK','FULA','TST','KS','OKP','FT','JP','ZP','SP','VHP','TOW','AKS'];
-  const alleEingetragen=allAusb.every(k=>ausb[k]===true);
-  switch(r){
-    case 1: return false;
-    case 2: return ausb.GA&&ausb.EHK;
-    case 3: return false;
-    case 4: return ausb.ES&&ausb.OP;
-    case 5: return ausb.OK&&ausb.FULA;
-    case 6: return ausb.TST;
-    case 7: return ausb.KS;
-    case 8: return ausb.OKP;
-    case 9: return ausb.FT;
-    case 10: return ausb.JP;
-    case 11: return ausb.ZP;
-    case 12: return ausb.SP;
-    case 13: case 14: case 15: case 16: return weeks2;
-    case 17: case 18: case 19: case 20: case 21: case 22: return false;
-    case 23: return alleEingetragen&&month1;
-    default: return false;
-  }
-}
-
-function renderPage11(){
-  const tbody=document.getElementById('p11-tbody');
-  if (!tbody) return;
-  const eligible=mitarbeiterData.filter(ma=>{
-    const r=parseInt(ma.rank);
-    if (!r||r<=0) return false;
-    return checkVoraussetzung(ma);
-  });
-  if (eligible.length===0){
-    tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">Keine Mitarbeiter erfüllen aktuell die Voraussetzungen.</td></tr>`;
-    return;
-  }
-  const sorted=[...eligible].sort((a,b)=>(parseInt(b.rank)||0)-(parseInt(a.rank)||0));
-  tbody.innerHTML=sorted.map(ma=>{
-    const r=parseInt(ma.rank);
-    const hatSanktion=sanktionData.some(s=>s.id===ma.id);
-    return `<tr>
-      <td>${ma.id||''}</td><td>${ma.name||''}</td>
-      <td>${rankName(r)}</td><td>${rankName(r+1)}</td>
-      <td>${hatSanktion?'<span style="color:var(--red);font-weight:700;">Ja</span>':'<span style="color:var(--green);font-weight:700;">Nein</span>'}</td>
-    </tr>`;
-  }).join('');
-}
-
-function rankName(r){
-  const ranks={
-    1:'Suspended',2:'Cadet',3:'TOW Officer',4:'Rookie',
-    5:'Officer I',6:'Officer II',7:'Officer First Class',8:'Supervising Officer',
-    9:'Senior Supervisor',10:'Lead Supervisor',11:'Corporal',12:'Detective',
-    13:'Sergeant',14:'Lieutenant',15:'Captain',16:'Commander',
-    17:'Special Police Officer',18:'Press Associator',19:'Enforcement Supervisor',
-    20:'S.W.A.T. Captain',21:'HR Coordinator',22:'IU Investigator',
-    23:'Police Inspector',24:'Police Commander',25:'Deputy Chief of Department',
-    26:'Chief of Department',27:'Advising Chief of Police',28:'Assistant Chief of Police',
-    29:'Deputy Chief of Police',30:'Chief of Police'
-  };
-  const n=parseInt(r);
-  if (!n||!ranks[n]) return r||'';
-  return n+' - '+ranks[n];
-}
-
-window.spinChange=function(id,delta){
-  const el=document.getElementById(id);
-  let v=parseInt(el.textContent)||0;
-  v=Math.max(0,Math.min(3,v+delta));
-  el.textContent=v;
-}
-
-</script>
-</body>
-</html>
