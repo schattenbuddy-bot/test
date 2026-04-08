@@ -449,6 +449,24 @@
   .archiv-group-body tbody tr:last-child td { border-bottom:none; }
   .archiv-group-body tbody tr:hover td { background:rgba(239,68,68,0.05); }
   .archiv-empty { text-align:center; padding:40px; color:var(--text-muted); font-size:13px; letter-spacing:1px; }
+
+  /* ===== SANKTION NEUE NACHRICHT BLINKEN ===== */
+  @keyframes sanktionBlink {
+    0%,100% { background:transparent; }
+    50% { background:rgba(239,68,68,0.18); }
+  }
+  .sank-row-new {
+    animation: sanktionBlink 1.2s ease infinite;
+  }
+  .sank-row-new td {
+    border-color: rgba(239,68,68,0.35) !important;
+  }
+  .sank-new-badge {
+    display:inline-block; background:#dc2626; color:white;
+    font-size:9px; font-weight:700; padding:1px 5px;
+    border-radius:10px; margin-left:6px; letter-spacing:0.5px;
+    vertical-align:middle; animation: sanktionBlink 1.2s ease infinite;
+  }
 </style>
 </head>
 <body>
@@ -1340,7 +1358,7 @@ window.showPage = function(n) {
   if (n === 7) renderMitarbeiter();
   if (n === 8) renderZugriff();
   if (n === 9) renderArchiv();
-  if (n === 10) renderSanktionen();
+  if (n === 10) { renderSanktionen(); setTimeout(checkAllSanktionNewMessages, 300); }
   if (n === 6) { if (skRules.length === 0) loadSKRules().then(renderSKRules); else renderSKRules(); }
   if (n === 11) renderPage11();
   if (n === 12) loadSanktionArchiv();
@@ -1411,6 +1429,7 @@ onAuthStateChanged(auth, async (user) => {
       window.scrollTo(0, 0);
 
       try { await loadAllData(); } catch(e) { console.warn('[AUTH] loadAllData:', e.message); }
+      loadSeenTimestamps();
 
       let savedPage = 2;
       try {
@@ -2266,6 +2285,8 @@ function renderSanktionen(filtered=null){
     <td>${s.grund||''}</td><td>${s.strafe||''}</td>
     <td><button class="tool-btn" onclick="showSanktionPage('${s.nr||s._id}')">Zur Sanktion</button></td>
   </tr>`).join('');
+  // Nach dem Rendern neue Nachrichten prüfen
+  if (currentPage === 10) checkAllSanktionNewMessages();
 }
 
 window.autoGenSkNr = function() {
@@ -2388,6 +2409,18 @@ window.showSanktionPage=function(nr){
   }
   document.querySelectorAll('#sanktionPages .page').forEach(p=>{p.classList.remove('active');p.style.display='none';});
   dp.style.display='block'; dp.classList.add('active');
+  // Als gesehen markieren → Blinken stoppen
+  markSanktionSeen(s.nr);
+  // Zeile in Tabelle sofort aktualisieren
+  const rows = document.querySelectorAll('#sank-tbody tr');
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length > 0 && cells[0].textContent.trim() === s.nr) {
+      row.classList.remove('sank-row-new');
+      const btn = row.querySelector('button');
+      if (btn) btn.innerHTML = 'Zur Sanktion';
+    }
+  });
   // Chat laden
   loadSanktionChat(s.nr, s._id);
 }
@@ -2397,7 +2430,62 @@ window.backFromSanktionDetail=function(nr){
   showPage(10);
 }
 
-// ===== SANKTION CHAT =====
+// ===== SANKTION NEUE NACHRICHTEN TRACKING =====
+// Speichert für jede Sanktions-ID (nr) den Timestamp des letzten Besuchs
+// Format: { [nr]: "2024-01-01T12:00:00.000Z" }
+let sanktionSeenTimestamps = {};
+
+function loadSeenTimestamps() {
+  try {
+    const raw = localStorage.getItem('lspd_sank_seen_'+currentUser?.uid);
+    if (raw) sanktionSeenTimestamps = JSON.parse(raw);
+  } catch(e) { sanktionSeenTimestamps = {}; }
+}
+
+function markSanktionSeen(nr) {
+  sanktionSeenTimestamps[nr] = new Date().toISOString();
+  try {
+    localStorage.setItem('lspd_sank_seen_'+currentUser?.uid, JSON.stringify(sanktionSeenTimestamps));
+  } catch(e) {}
+}
+
+// Prüft für alle Sanktionen ob neue Nachrichten vorhanden sind
+// und markiert die Zeilen in der Tabelle entsprechend
+async function checkAllSanktionNewMessages() {
+  for (const s of sanktionData) {
+    if (!s._id || !s.nr) continue;
+    try {
+      const snap = await getDocs(collection(db,'sanktionen',s._id,'nachrichten'));
+      if (snap.empty) continue;
+      const msgs = snap.docs.map(d=>d.data());
+      const lastSeen = sanktionSeenTimestamps[s.nr] || '1970-01-01T00:00:00.000Z';
+      // Nachrichten die NICHT vom aktuellen User sind und neuer als lastSeen
+      const hasNew = msgs.some(m =>
+        m.userUID !== currentUser?.uid &&
+        (m.timestamp||'') > lastSeen
+      );
+      // Zeile markieren
+      const rows = document.querySelectorAll(`#sank-tbody tr`);
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length > 0 && cells[0].textContent.trim() === s.nr) {
+          if (hasNew) {
+            row.classList.add('sank-row-new');
+            // Badge auf "Zur Sanktion" Button
+            const btn = row.querySelector('button');
+            if (btn && !btn.querySelector('.sank-new-badge')) {
+              btn.innerHTML = 'Zur Sanktion <span class="sank-new-badge">NEU</span>';
+            }
+          } else {
+            row.classList.remove('sank-row-new');
+            const btn = row.querySelector('button');
+            if (btn) btn.innerHTML = 'Zur Sanktion';
+          }
+        }
+      });
+    } catch(e) { /* ignorieren */ }
+  }
+}
 async function loadSanktionChat(nr, sanktionFirestoreId) {
   const chatBox = document.getElementById('sd-chat-'+nr);
   if (!chatBox) return;
