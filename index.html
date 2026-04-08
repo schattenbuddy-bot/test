@@ -1432,7 +1432,7 @@ window.showPage = function(n) {
   }
   window.scrollTo(0, 0);
   if (n === 7) renderMitarbeiter();
-  if (n === 8) renderZugriff();
+  if (n === 8) { loadZugriff(); }
   if (n === 9) renderArchiv();
   if (n === 10) { renderSanktionen(); setTimeout(checkAllSanktionNewMessages, 300); }
   if (n === 6) { if (skRules.length === 0) loadSKRules().then(renderSKRules); else renderSKRules(); }
@@ -2329,33 +2329,56 @@ window.deleteEntlassungsgruppe = function() {
 
 // ===== ZUGRIFF =====
 async function loadZugriff() {
+  let zugriffDocs = [];
+  let anfragenDocs = [];
+
   try {
-    const [zugriffSnap, anfragenSnap] = await Promise.all([
-      getDocs(collection(db,'zugriff')),
-      getDocs(collection(db,'anfragen'))
-    ]);
-    const zugriffDocs = zugriffSnap.docs.map(d=>({...d.data(),_id:d.id,_quelle:'zugriff'}));
-    const anfragenDocs = anfragenSnap.docs.map(d=>({...d.data(),_id:d.id,_quelle:'anfragen'}));
-    const zugriffEmails = new Set(zugriffDocs.map(z=>z.email));
-    const zugriffIds = new Set(zugriffDocs.map(z=>z.id));
-    const nochNicht = anfragenDocs.filter(a=>!zugriffEmails.has(a.email)&&!zugriffIds.has(a.id));
-    zugriffData = [...zugriffDocs,...nochNicht];
+    const zugriffSnap = await getDocs(collection(db,'zugriff'));
+    zugriffDocs = zugriffSnap.docs.map(d=>({...d.data(), _id:d.id, _quelle:'zugriff'}));
   } catch(e) {
-    console.warn('[ZUGRIFF] Laden fehlgeschlagen:', e.message);
-    zugriffData = [];
+    console.warn('[ZUGRIFF] zugriff Laden fehlgeschlagen:', e.message);
   }
+
+  try {
+    const anfragenSnap = await getDocs(collection(db,'anfragen'));
+    anfragenDocs = anfragenSnap.docs.map(d=>({...d.data(), _id:d.id, _quelle:'anfragen'}));
+  } catch(e) {
+    console.warn('[ZUGRIFF] anfragen Laden fehlgeschlagen:', e.message);
+  }
+
+  const zugriffEmails = new Set(zugriffDocs.map(z => (z.email || '').toLowerCase()).filter(Boolean));
+  const zugriffIds = new Set(zugriffDocs.map(z => String(z.id || '').trim()).filter(Boolean));
+  const nochNicht = anfragenDocs.filter(a => {
+    const email = (a.email || '').toLowerCase();
+    const id = String(a.id || '').trim();
+    return !(email && zugriffEmails.has(email)) && !(id && zugriffIds.has(id));
+  });
+
+  zugriffData = [...zugriffDocs, ...nochNicht].sort((a, b) => {
+    const aApproved = a.freigegeben === true ? 1 : 0;
+    const bApproved = b.freigegeben === true ? 1 : 0;
+    if (aApproved !== bApproved) return bApproved - aApproved;
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  });
+
   renderZugriff();
 }
 
 function renderZugriff(filtered=null) {
-  const list=filtered||zugriffData;
-  const tbody=document.getElementById('zug-tbody');
+  const list = filtered || zugriffData;
+  const tbody = document.getElementById('zug-tbody');
   if (!tbody) return;
-  tbody.innerHTML=list.map(z=>{
-    const status=z.freigegeben
-      ?'<span class="status-freigegeben">Freigegeben</span>'
-      :'<span class="status-wartet">Wartet</span>';
-    const sel=`<select class="freigabe-select" onchange="setFreigabe('${z._id}',this.value,'${z._quelle||'zugriff'}')">
+
+  if (!list || list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:20px;">Keine Zugriffsanfragen oder Zugriffe gefunden.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(z => {
+    const status = z.freigegeben
+      ? '<span class="status-freigegeben">Freigegeben</span>'
+      : '<span class="status-wartet">Wartet</span>';
+    const sel = `<select class="freigabe-select" onchange="setFreigabe('${z._id}',this.value,'${z._quelle||'zugriff'}')">
       <option value="nein" ${!z.freigegeben?'selected':''}>Nein</option>
       <option value="ja" ${z.freigegeben?'selected':''}>Ja</option>
     </select>`;
