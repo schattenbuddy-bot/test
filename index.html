@@ -450,22 +450,18 @@
   .archiv-group-body tbody tr:hover td { background:rgba(239,68,68,0.05); }
   .archiv-empty { text-align:center; padding:40px; color:var(--text-muted); font-size:13px; letter-spacing:1px; }
 
-  /* ===== SANKTION NEUE NACHRICHT BLINKEN ===== */
-  @keyframes sanktionBlink {
-    0%,100% { background:transparent; }
-    50% { background:rgba(239,68,68,0.18); }
-  }
-  .sank-row-new {
-    animation: sanktionBlink 1.2s ease infinite;
-  }
+  /* ===== SANKTION NEUE NACHRICHT MARKIERUNG ===== */
   .sank-row-new td {
-    border-color: rgba(239,68,68,0.35) !important;
+    border-color: rgba(239,68,68,0.6) !important;
+  }
+  .sank-row-new td:first-child {
+    border-left: 3px solid #dc2626 !important;
   }
   .sank-new-badge {
     display:inline-block; background:#dc2626; color:white;
     font-size:9px; font-weight:700; padding:1px 5px;
     border-radius:10px; margin-left:6px; letter-spacing:0.5px;
-    vertical-align:middle; animation: sanktionBlink 1.2s ease infinite;
+    vertical-align:middle;
   }
 </style>
 </head>
@@ -2535,6 +2531,7 @@ window.sendSanktionChat = async function(nr, sanktionFirestoreId) {
       sanktionId: s?.id||''
     };
     await addDoc(collection(db,'sanktionen',sanktionFirestoreId,'nachrichten'), msg);
+    await writeLog('sanktion','update',`Nachricht in Sanktion SK-${nr} geschrieben: "${text}"`, s?.id||nr);
     input.value = '';
     await loadSanktionChat(nr, sanktionFirestoreId);
   } catch(e) { showNotif('Fehler beim Senden: '+e.message,'error'); }
