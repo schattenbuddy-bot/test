@@ -1601,12 +1601,58 @@ function renderSonderInfos() {
     return;
   }
   box.innerHTML = currentUserSanktionen.map((s,i) => `
-    <div style="margin-bottom:${i<currentUserSanktionen.length-1?'12px':'0'};padding-bottom:${i<currentUserSanktionen.length-1?'12px':'0'};border-bottom:${i<currentUserSanktionen.length-1?'1px solid rgba(30,58,95,0.4)':'none'};">
+    <div style="margin-bottom:${i<currentUserSanktionen.length-1?'14px':'0'};padding-bottom:${i<currentUserSanktionen.length-1?'14px':'0'};border-bottom:${i<currentUserSanktionen.length-1?'1px solid rgba(30,58,95,0.4)':'none'};">
       <div style="color:var(--red);font-size:11px;font-weight:700;letter-spacing:1px;margin-bottom:4px;">⚠ SANKTION ${s.nr||(i+1)}</div>
       <div style="font-size:12px;color:var(--text-dim);margin-bottom:3px;"><span style="color:var(--text);">Grund:</span> ${s.grund||'–'}</div>
-      <div style="font-size:12px;color:var(--text-dim);"><span style="color:var(--text);">Strafe:</span> ${s.strafe||'–'}</div>
-      ${s.beweise?`<div style="font-size:11px;margin-top:4px;color:var(--cyan);word-break:break-all;">✅ Sanktion abgearbeitet</div>`:''}
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;"><span style="color:var(--text);">Strafe:</span> ${s.strafe||'–'}</div>
+      ${s.beweise?`<div style="font-size:11px;margin-bottom:6px;color:var(--green);">✅ Sanktion abgearbeitet</div>`:''}
+      <div>
+        <button onclick="toggleSanktionNachrichten('sonder-chat-${s._id}')"
+          style="background:rgba(0,0,0,0.3);border:1px solid var(--border);color:var(--text-dim);padding:4px 10px;border-radius:3px;font-size:11px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:600;letter-spacing:0.5px;">
+          💬 Nachrichten anzeigen
+        </button>
+        <div id="sonder-chat-${s._id}" style="display:none;margin-top:10px;background:rgba(5,10,20,0.6);border:1px solid var(--border);border-radius:4px;padding:10px;">
+          <div id="sonder-chat-msgs-${s._id}" style="min-height:40px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">
+            <div style="color:var(--text-muted);font-size:11px;text-align:center;">Wird geladen...</div>
+          </div>
+        </div>
+      </div>
     </div>`).join('');
+}
+
+window.toggleSanktionNachrichten = async function(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    // Nachrichten laden beim Aufklappen
+    const sanktionId = containerId.replace('sonder-chat-','');
+    const s = currentUserSanktionen.find(x=>x._id===sanktionId);
+    if (!s) return;
+    try {
+      const snap = await getDocs(collection(db,'sanktionen',sanktionId,'nachrichten'));
+      const msgs = snap.docs.map(d=>({...d.data(),_id:d.id}));
+      msgs.sort((a,b)=>(a.timestamp||'').localeCompare(b.timestamp||''));
+      const msgsBox = document.getElementById('sonder-chat-msgs-'+sanktionId);
+      if (!msgsBox) return;
+      if (msgs.length === 0) {
+        msgsBox.innerHTML = `<div style="color:var(--text-muted);font-size:11px;text-align:center;">Noch keine Nachrichten.</div>`;
+      } else {
+        msgsBox.innerHTML = msgs.map(m => {
+          const ts = m.timestamp ? new Date(m.timestamp).toLocaleString('de-DE') : '';
+          return `<div style="background:rgba(13,21,37,0.9);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
+            <div style="font-size:10px;color:var(--cyan);font-weight:700;margin-bottom:2px;">${m.userName||m.userEmail||'?'} <span style="color:var(--text-muted);font-weight:400;">— ${ts}</span></div>
+            <div style="font-size:12px;color:var(--text);word-break:break-word;">${m.text||''}</div>
+          </div>`;
+        }).join('');
+        msgsBox.scrollTop = msgsBox.scrollHeight;
+      }
+    } catch(e) {
+      const msgsBox = document.getElementById('sonder-chat-msgs-'+sanktionId);
+      if (msgsBox) msgsBox.innerHTML = `<div style="color:var(--red);font-size:11px;">Fehler beim Laden.</div>`;
+    }
+  }
 }
 
 window.sendBeweisLink = async function() {
@@ -2316,7 +2362,7 @@ window.showSanktionPage=function(nr){
     dp.innerHTML=`
       <div style="display:flex;align-items:center;padding:8px 12px;background:var(--bg-panel);border-bottom:1px solid var(--border);">
         <button class="tool-btn back" onclick="backFromSanktionDetail('${s.nr}')">← BACK</button>
-        <div style="flex:1;"></div>
+        <div style="flex:1;text-align:center;font-size:13px;font-weight:700;color:var(--text-dim);letter-spacing:1px;">SK ${s.nr}</div>
         <button class="tool-btn" onclick="openEditSanktionModal('${s.nr}')">✏️</button>
       </div>
       <div class="table-wrapper">
@@ -2329,16 +2375,81 @@ window.showSanktionPage=function(nr){
             <td id="sd-beweise-${s.nr}">${s.beweise||''}</td>
           </tr></tbody>
         </table>
+      </div>
+      <div style="padding:16px 16px 0 16px;">
+        <div style="font-family:'Orbitron',monospace;font-size:12px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">💬 NACHRICHTEN</div>
+        <div id="sd-chat-${s.nr}" style="min-height:60px;max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;align-items:center;padding-bottom:16px;">
+          <input id="sd-chat-input-${s.nr}" class="modal-input" placeholder="Nachricht eingeben..." style="flex:1;" onkeydown="if(event.key==='Enter')sendSanktionChat('${s.nr}','${s._id}')">
+          <button class="tool-btn purple" onclick="sendSanktionChat('${s.nr}','${s._id}')" style="white-space:nowrap;">Senden</button>
+        </div>
       </div>`;
     document.getElementById('sanktionPages').appendChild(dp);
   }
   document.querySelectorAll('#sanktionPages .page').forEach(p=>{p.classList.remove('active');p.style.display='none';});
   dp.style.display='block'; dp.classList.add('active');
+  // Chat laden
+  loadSanktionChat(s.nr, s._id);
 }
 
 window.backFromSanktionDetail=function(nr){
   document.querySelectorAll('#sanktionPages .page').forEach(p=>{p.classList.remove('active');p.style.display='none';});
   showPage(10);
+}
+
+// ===== SANKTION CHAT =====
+async function loadSanktionChat(nr, sanktionFirestoreId) {
+  const chatBox = document.getElementById('sd-chat-'+nr);
+  if (!chatBox) return;
+  try {
+    const snap = await getDocs(collection(db, 'sanktionen', sanktionFirestoreId, 'nachrichten'));
+    const msgs = snap.docs.map(d=>({...d.data(),_id:d.id}));
+    msgs.sort((a,b)=>(a.timestamp||'').localeCompare(b.timestamp||''));
+    renderSanktionChat(nr, msgs);
+  } catch(e) { console.warn('[CHAT] Laden fehlgeschlagen:', e.message); }
+}
+
+function renderSanktionChat(nr, msgs) {
+  const chatBox = document.getElementById('sd-chat-'+nr);
+  if (!chatBox) return;
+  if (msgs.length === 0) {
+    chatBox.innerHTML = `<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px;">Noch keine Nachrichten.</div>`;
+    return;
+  }
+  chatBox.innerHTML = msgs.map(m => {
+    const isMe = m.userUID === currentUser?.uid;
+    const ts = m.timestamp ? new Date(m.timestamp).toLocaleString('de-DE') : '';
+    return `<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'};">
+      <div style="max-width:75%;background:${isMe?'rgba(139,92,246,0.2)':'rgba(13,21,37,0.9)'};border:1px solid ${isMe?'rgba(139,92,246,0.4)':'var(--border)'};border-radius:8px;padding:8px 12px;">
+        <div style="font-size:10px;color:${isMe?'#a78bfa':'var(--cyan)'};margin-bottom:4px;font-weight:700;">${m.userName||m.userEmail||'?'}</div>
+        <div style="font-size:13px;color:var(--text);word-break:break-word;">${m.text||''}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:4px;text-align:right;">${ts}</div>
+      </div>
+    </div>`;
+  }).join('');
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+window.sendSanktionChat = async function(nr, sanktionFirestoreId) {
+  const input = document.getElementById('sd-chat-input-'+nr);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  const s = sanktionData.find(x=>x.nr===nr||x._id===sanktionFirestoreId);
+  try {
+    const msg = {
+      text,
+      userUID:   currentUser?.uid||'',
+      userEmail: currentUser?.email||'',
+      userName:  currentUser?.displayName||currentUser?.email||'',
+      timestamp: new Date().toISOString(),
+      sanktionNr: nr,
+      sanktionId: s?.id||''
+    };
+    await addDoc(collection(db,'sanktionen',sanktionFirestoreId,'nachrichten'), msg);
+    input.value = '';
+    await loadSanktionChat(nr, sanktionFirestoreId);
+  } catch(e) { showNotif('Fehler beim Senden: '+e.message,'error'); }
 }
 
 window.openEditSanktionModal=function(nr){
