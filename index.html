@@ -665,6 +665,7 @@
     <button class="tool-btn purple" onclick="clearAndOpenModal('addRuleModal')" title="Regel hinzufügen">＋</button>
     <button class="tool-btn" onclick="openEditRuleModal()" title="Spalten umbenennen">✏️</button>
     <div class="ml-auto"></div>
+    <button class="tool-btn red" onclick="deleteRuleBySearch()" title="Regel löschen">✕</button>
     <button class="tool-btn" onclick="openEditRuleBySearch()" title="Regel bearbeiten">✏️</button>
     <button class="tool-btn" onclick="searchRule()">🔍</button>
     <input class="search-input" autocomplete="off" id="sk-search" placeholder="§ Durchsuchen" style="margin-left:4px;">
@@ -902,9 +903,9 @@
     <div class="modal-field">
       <div class="modal-label">Rang (Rechte)</div>
       <select class="modal-input" autocomplete="off" id="az-rang">
-        <option value="1">1 - Mitarbeiter</option><option value="6">6 - PA</option>
-        <option value="7">7 - IU</option><option value="8">8 - IU Leitung</option>
-        <option value="9">9 - HR</option><option value="10">10 - HR Leitung</option>
+        <option value="1">Mitarbeiter</option><option value="6">PA</option>
+        <option value="7">IU</option><option value="8">IU Leitung</option>
+        <option value="9">HR</option><option value="10">HR Leitung</option>
         <option value="Admin">Admin</option><option value="Leaderschaft">Leaderschaft</option>
         <option value="Ersteller">Ersteller</option>
       </select>
@@ -929,9 +930,9 @@
     <div class="modal-field">
       <div class="modal-label">Rang (Rechte)</div>
       <select class="modal-input" autocomplete="off" id="ez-rang">
-        <option value="1">1 - Mitarbeiter</option><option value="6">6 - PA</option>
-        <option value="7">7 - IU</option><option value="8">8 - IU Leitung</option>
-        <option value="9">9 - HR</option><option value="10">10 - HR Leitung</option>
+        <option value="1">Mitarbeiter</option><option value="6">PA</option>
+        <option value="7">IU</option><option value="8">IU Leitung</option>
+        <option value="9">HR</option><option value="10">HR Leitung</option>
         <option value="Admin">Admin</option><option value="Leaderschaft">Leaderschaft</option>
         <option value="Ersteller">Ersteller</option>
       </select>
@@ -2292,7 +2293,9 @@ function renderZugriff(filtered=null) {
       <option value="nein" ${!z.freigegeben?'selected':''}>Nein</option>
       <option value="ja" ${z.freigegeben?'selected':''}>Ja</option>
     </select>`;
-    const rangAnzeige=(!z.freigegeben&&(z.rang==='Admin'||!z.rang))?'1':(z.rang||'1');
+    const rangNamen = {'1':'Mitarbeiter','6':'PA','7':'IU','8':'IU Leitung','9':'HR','10':'HR Leitung','Admin':'Admin','Leaderschaft':'Leaderschaft','Ersteller':'Ersteller'};
+    const rangRaw = (!z.freigegeben&&(z.rang==='Admin'||!z.rang)) ? '1' : (z.rang||'1');
+    const rangAnzeige = rangNamen[rangRaw] || rangRaw;
     return `<tr>
       <td>${z.id||''}</td><td>${z.name||''}</td><td>${z.nachname||''}</td>
       <td>${z.tel||''}</td><td>${z.email||''}</td>
@@ -3008,6 +3011,24 @@ window.openEditRuleBySearch=function(){
       if(lbl) lbl.textContent=skHeaders[i]||String(i);
     }
   },30);
+}
+
+window.deleteRuleBySearch=function(){
+  const q=document.getElementById('sk-search').value.trim();
+  if (!q) return showNotif('Bitte § ins Suchfeld eingeben','error');
+  const rule=skRules.find(r=>(r.para||'').includes(q)||(r.def||'').toLowerCase().includes(q.toLowerCase()));
+  if (!rule) return showNotif('Regel nicht gefunden','error');
+  document.getElementById('del-title').textContent='Regel wirklich löschen?';
+  document.getElementById('del-msg').textContent=`Möchtest du Regel "${rule.para} — ${rule.def||''}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`;
+  document.getElementById('del-confirm-btn').textContent='Ja, wirklich löschen';
+  deleteCallback=async()=>{
+    await deleteDoc(doc(db,'skRules',rule._id));
+    await writeLog('sk','delete',`SK Regel ${rule.para} gelöscht: ${rule.def||''}`,rule.para);
+    showNotif('Regel gelöscht','success');
+    document.getElementById('sk-search').value='';
+    await loadSKRules();
+  };
+  openModal('deleteConfirmModal');
 }
 
 // ===== DELETE CONFIRM =====
