@@ -1863,7 +1863,6 @@ window.addMitarbeiter = async function() {
     name: document.getElementById('ma-name').value.trim(),
     tel: document.getElementById('ma-tel').value.trim(),
     rank: newRank,
-    // Division wird berechnet - nicht fest gespeichert um Inkonsistenz zu vermeiden
     invite: isNew ? today : (document.getElementById('ma-invite').value || (mitarbeiterData.find(m=>m._id===editingMaId)||{}).invite||today),
     rankup: document.getElementById('ma-rankup').value,
     abteilung: document.getElementById('ma-abt').value.trim(),
@@ -1871,6 +1870,16 @@ window.addMitarbeiter = async function() {
     urlaub: parseInt(document.getElementById('ma-urlaub').textContent)||0,
     strike: parseInt(document.getElementById('ma-strike').textContent)||0,
   };
+
+  // DN-Dopplung prüfen (nur wenn DN ausgefüllt)
+  if (data.dn) {
+    const dnConflict = mitarbeiterData.find(m =>
+      m.dn === data.dn && m._id !== editingMaId
+    );
+    if (dnConflict) {
+      return showNotif(`DN ${data.dn} ist bereits vergeben (${dnConflict.name||dnConflict.id})!`, 'error');
+    }
+  }
   try {
     if (editingMaId) {
       const existing = mitarbeiterData.find(m=>m._id===editingMaId);
@@ -1929,13 +1938,18 @@ window.archiveMitarbeiter = async function() {
   if (!id) return showNotif('Bitte ID eingeben','error');
   const ma = mitarbeiterData.find(m=>m.id===id);
   if (!ma) return showNotif('Mitarbeiter nicht gefunden','error');
-  try {
-    await addDoc(collection(db,'archiv'), ma);
-    await deleteDoc(doc(db,'mitarbeiter',ma._id));
-    await writeLog('mitarbeiter','archiv',`Mitarbeiter archiviert: ${ma.name||id} (ID: ${id})`,id);
-    showNotif('Mitarbeiter archiviert','success');
-    await loadMitarbeiter(); await loadArchiv();
-  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
+  document.getElementById('del-title').textContent = 'Mitarbeiter archivieren?';
+  document.getElementById('del-msg').textContent = `Möchtest du "${ma.name||ma.id}" (ID: ${id}, DN: ${ma.dn||'–'}) wirklich ins Archiv verschieben?`;
+  deleteCallback = async () => {
+    try {
+      await addDoc(collection(db,'archiv'), ma);
+      await deleteDoc(doc(db,'mitarbeiter',ma._id));
+      await writeLog('mitarbeiter','archiv',`Mitarbeiter archiviert: ${ma.name||id} (ID: ${id})`,id);
+      showNotif('Mitarbeiter archiviert','success');
+      await loadMitarbeiter(); await loadArchiv();
+    } catch(e) { showNotif('Fehler: '+e.message,'error'); }
+  };
+  openModal('deleteConfirmModal');
 }
 
 window.searchMitarbeiter = function() {
