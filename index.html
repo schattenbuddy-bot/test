@@ -927,8 +927,8 @@
     <div class="modal-title" id="del-title">Wirklich löschen?</div>
     <p id="del-msg" style="color:#fca5a5;font-size:14px;margin-bottom:20px;"></p>
     <div class="modal-btns">
-      <button class="btn-modal gray" onclick="closeModal('deleteConfirmModal')">Abbrechen</button>
-      <button class="btn-modal red" onclick="confirmDelete()">Ja, Löschen</button>
+      <button class="btn-modal gray" onclick="closeModal('deleteConfirmModal');document.getElementById('del-confirm-btn').textContent='Ja, Löschen';document.getElementById('del-title').textContent='Wirklich löschen?';">Abbrechen</button>
+      <button class="btn-modal red" id="del-confirm-btn" onclick="confirmDelete()">Ja, Löschen</button>
     </div>
   </div>
 </div>
@@ -1938,8 +1938,9 @@ window.archiveMitarbeiter = async function() {
   if (!id) return showNotif('Bitte ID eingeben','error');
   const ma = mitarbeiterData.find(m=>m.id===id);
   if (!ma) return showNotif('Mitarbeiter nicht gefunden','error');
-  document.getElementById('del-title').textContent = 'Mitarbeiter archivieren?';
+  document.getElementById('del-title').textContent = 'Wirklich archivieren?';
   document.getElementById('del-msg').textContent = `Möchtest du "${ma.name||ma.id}" (ID: ${id}, DN: ${ma.dn||'–'}) wirklich ins Archiv verschieben?`;
+  document.getElementById('del-confirm-btn').textContent = 'Ja, Archivieren';
   deleteCallback = async () => {
     try {
       await addDoc(collection(db,'archiv'), ma);
@@ -2803,6 +2804,8 @@ window.openEditRuleBySearch=function(){
 window.confirmDelete=async function(){
   if (deleteCallback) { await deleteCallback(); deleteCallback=null; }
   closeModal('deleteConfirmModal');
+  document.getElementById('del-confirm-btn').textContent='Ja, Löschen';
+  document.getElementById('del-title').textContent='Wirklich löschen?';
 }
 
 // ===== HELPERS =====
