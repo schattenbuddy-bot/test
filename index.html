@@ -401,7 +401,29 @@
   .log-clear-btn { padding:6px 14px; background:rgba(127,29,29,0.5); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; cursor:pointer; border-radius:3px; font-size:12px; transition:all 0.2s; margin-left:auto; }
   .log-clear-btn:hover { background:rgba(185,28,28,0.6); }
 
-  /* ===== SANKTIONS-ARCHIV GRUPPENANSICHT ===== */
+  /* ===== SEITE 19 - ENTLASSUNGSARCHIV ===== */
+  .entlass-group {
+    margin-bottom:10px;
+    border:1px solid var(--border);
+    border-radius:4px;
+    overflow:hidden;
+  }
+  .entlass-group-header {
+    display:flex; align-items:center; gap:12px;
+    padding:12px 16px;
+    background:linear-gradient(135deg, rgba(10,20,40,0.95), rgba(15,28,55,0.9));
+    cursor:pointer; user-select:none;
+    transition:background 0.2s;
+  }
+  .entlass-group-header:hover { background:linear-gradient(135deg, rgba(0,60,140,0.2), rgba(10,30,70,0.95)); }
+  .entlass-group-header.open { border-bottom:1px solid var(--border); }
+  .entlass-group-arrow { font-size:11px; color:var(--cyan); transition:transform 0.25s; flex-shrink:0; }
+  .entlass-group-header.open .entlass-group-arrow { transform:rotate(90deg); }
+  .entlass-group-title { font-family:'Orbitron',monospace; font-size:13px; font-weight:700; color:white; letter-spacing:1px; }
+  .entlass-group-zeitraum { font-size:11px; color:var(--text-dim); }
+  .entlass-group-count { margin-left:auto; background:rgba(30,58,95,0.5); border:1px solid var(--border); color:var(--text-dim); font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; white-space:nowrap; }
+  .entlass-group-body { display:none; }
+  .entlass-group-body.open { display:block; }
   .archiv-group {
     margin-bottom:10px;
     border:1px solid var(--border);
@@ -938,6 +960,8 @@
   <div class="toolbar">
     <button class="tool-btn back" onclick="showPage(7)">← BACK</button>
     <div style="flex:1;text-align:center;"><span style="font-size:14px;font-weight:700;color:var(--text-dim);">Mitarbeiter Archiv</span></div>
+    <button class="tool-btn red" onclick="openEntlassungModal()" title="Alle ins Entlassungsarchiv verschieben">📦→</button>
+    <button class="tool-btn" onclick="showPage(19)" title="Entlassungsarchiv">📁</button>
     <button class="tool-btn red" onclick="deleteArchived()">✕</button>
     <button class="tool-btn" onclick="searchArchive()">🔍</button>
     <input class="search-input" autocomplete="off" id="arch-search" placeholder="Archiv Durchsuchen">
@@ -1024,7 +1048,42 @@
   <div id="sank-archiv-container" style="padding:12px;"></div>
 </div>
 
-<!-- PAGE 20 - AKTIVITÄTSLOG (Nur Ersteller) -->
+<!-- PAGE 19 - ENTLASSUNGSARCHIV -->
+<div id="page19" class="page">
+  <div class="toolbar">
+    <button class="tool-btn back" onclick="showPage(9)">← BACK</button>
+    <div style="flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text-dim);">Entlassungsarchiv</div>
+    <button class="tool-btn red" onclick="deleteEntlassungsgruppe()">✕</button>
+    <button class="tool-btn" onclick="searchEntlassung()">🔍</button>
+    <input class="search-input" autocomplete="off" id="entlass-search" placeholder="Gruppe suchen...">
+    <button class="tool-btn purple" onclick="showPage(9)">← Zurück</button>
+  </div>
+  <div id="entlass-container" style="padding:12px;"></div>
+</div>
+
+<!-- Entlassung Modal -->
+<div class="modal-overlay" id="entlassungModal">
+  <div class="modal">
+    <div class="modal-title">📦 Ins Entlassungsarchiv verschieben</div>
+    <p style="color:var(--text-dim);font-size:12px;margin-bottom:16px;">Alle <span id="entlass-anzahl" style="color:var(--cyan);font-weight:700;"></span> Mitarbeiter im Archiv werden als Gruppe ins Entlassungsarchiv verschoben.</p>
+    <div class="modal-field">
+      <div class="modal-label">Gruppenname *</div>
+      <input class="modal-input" autocomplete="off" id="entlass-name" placeholder="z.B. Entlassung Welle 1">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Zeitraum Von *</div>
+      <input class="modal-input" id="entlass-von" type="date">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">Zeitraum Bis *</div>
+      <input class="modal-input" id="entlass-bis" type="date">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-modal gray" onclick="closeModal('entlassungModal')">Abbrechen</button>
+      <button class="btn-modal green" onclick="doEntlassung()">Weiter ▶</button>
+    </div>
+  </div>
+</div>
 <div id="page20" class="page">
   <div class="log-page-header">
     <div>
@@ -1344,7 +1403,7 @@ window.clearAndOpenModal = function(id) { openModal(id); }
 window.closeModal = function(id) { document.getElementById(id).classList.remove('open'); }
 
 // ===== PAGES =====
-const HIDE_NAV_PAGES = [9,10,11,12,20];
+const HIDE_NAV_PAGES = [9,10,11,12,19,20];
 
 window.showPage = function(n) {
   // Vorherige Seite merken (nur wenn nicht schon auf Seite 20)
@@ -1364,7 +1423,7 @@ window.showPage = function(n) {
   const p11 = document.getElementById('page11');
   if (p11) p11.style.display = (n === 11) ? 'flex' : 'none';
 
-  if ((n >= 2 && n <= 10) || n === 11 || n === 12 || n === 20) {
+  if ((n >= 2 && n <= 10) || n === 11 || n === 12 || n === 19 || n === 20) {
     try { localStorage.setItem('lspd_page', n); } catch(e) {}
   }
   window.scrollTo(0, 0);
@@ -1375,6 +1434,7 @@ window.showPage = function(n) {
   if (n === 6) { if (skRules.length === 0) loadSKRules().then(renderSKRules); else renderSKRules(); }
   if (n === 11) renderPage11();
   if (n === 12) loadSanktionArchiv();
+  if (n === 19) loadEntlassungsarchiv();
   if (n === 20) loadLogs();
   if (currentRang) setTimeout(() => applyRangPermissions(currentRang), 60);
 }
@@ -1451,7 +1511,7 @@ onAuthStateChanged(auth, async (user) => {
       let savedPage = 2;
       try {
         const sp = parseInt(localStorage.getItem('lspd_page'));
-        if (sp >= 2 && sp <= 12 || sp === 20) savedPage = sp;
+        if (sp >= 2 && sp <= 12 || sp === 19 || sp === 20) savedPage = sp;
       } catch(e) {}
 
       const rangStr = zugData.rang || '1';
@@ -1858,6 +1918,12 @@ window.addMitarbeiter = async function() {
   const today = new Date().toISOString().split('T')[0];
   const isNew = !editingMaId;
   const newRank = document.getElementById('ma-rank').value;
+
+  // ID-Dopplung prüfen (nur bei neuem Mitarbeiter)
+  if (isNew) {
+    const idConflict = mitarbeiterData.find(m => m.id === id);
+    if (idConflict) return showNotif(`ID ${id} existiert bereits (${idConflict.name||idConflict.id})!`, 'error');
+  }
   const data = {
     id, dn: document.getElementById('ma-dn').value.trim(),
     name: document.getElementById('ma-name').value.trim(),
@@ -2051,6 +2117,150 @@ window.deleteArchived = function() {
     await writeLog('mitarbeiter','delete',`Archivierter Mitarbeiter gelöscht: ${ma.name||id} (ID: ${id})`,id);
     showNotif('Gelöscht','success');
     await loadArchiv();
+  };
+  openModal('deleteConfirmModal');
+}
+
+// ===== ENTLASSUNGSARCHIV (Seite 19) =====
+let entlassungsData = []; // Array von Gruppen
+
+async function loadEntlassungsarchiv() {
+  try {
+    const snap = await getDocs(collection(db,'entlassungsarchiv'));
+    entlassungsData = snap.docs.map(d=>({...d.data(), _id:d.id}));
+    renderEntlassungsarchiv();
+  } catch(e) { console.warn('[ENTLASS] Laden fehlgeschlagen:', e.message); }
+}
+
+function renderEntlassungsarchiv(filtered=null) {
+  const container = document.getElementById('entlass-container');
+  if (!container) return;
+  const list = filtered || entlassungsData;
+  // Sortiert nach Datum absteigend
+  const sorted = [...list].sort((a,b)=>(b.erstelltAm||'').localeCompare(a.erstelltAm||''));
+  if (sorted.length === 0) {
+    container.innerHTML = `<div class="archiv-empty">📂 Kein Entlassungsarchiv vorhanden.</div>`;
+    return;
+  }
+  container.innerHTML = sorted.map((g, gi) => {
+    const mitarbeiter = g.mitarbeiter || [];
+    return `<div class="entlass-group">
+      <div class="entlass-group-header" onclick="toggleEntlassGroup(${gi})">
+        <span class="entlass-group-arrow">▶</span>
+        <span class="entlass-group-title">${g.name||'Unbenannte Gruppe'}</span>
+        <span class="entlass-group-zeitraum">${g.von||'?'} – ${g.bis||'?'}</span>
+        <span class="entlass-group-count">${mitarbeiter.length} Mitarbeiter</span>
+      </div>
+      <div class="entlass-group-body" id="entlass-body-${gi}">
+        <div class="table-wrapper">
+          <table class="data-table" style="width:100%;">
+            <thead><tr>
+              <th>ID</th><th>DN</th><th>Name</th><th>Tel.</th><th>Rang</th><th>Division</th>
+              <th>Invite</th><th>Last RankUp</th><th>Abteilung</th>
+            </tr></thead>
+            <tbody>
+              ${mitarbeiter.map(ma => {
+                const div = getDivisionLabel(ma.rank);
+                return `<tr>
+                  <td>${ma.id||''}</td>
+                  <td>${ma.dn||''}</td>
+                  <td>${ma.name||''}</td>
+                  <td>${ma.tel||''}</td>
+                  <td>${rankName(ma.rank)||''}</td>
+                  <td><span class="${div.cls}">${div.label}</span></td>
+                  <td>${ma.invite||''}</td>
+                  <td>${ma.rankup||''}</td>
+                  <td>${ma.abteilung||''}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.toggleEntlassGroup = function(gi) {
+  const header = document.querySelector(`#entlass-container .entlass-group:nth-child(${gi+1}) .entlass-group-header`);
+  const body   = document.getElementById('entlass-body-'+gi);
+  if (!header||!body) return;
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  header.classList.toggle('open', !isOpen);
+}
+
+window.openEntlassungModal = function() {
+  if (archivData.length === 0) return showNotif('Kein Mitarbeiter im Archiv vorhanden.','error');
+  document.getElementById('entlass-anzahl').textContent = archivData.length;
+  openModal('entlassungModal');
+}
+
+window.doEntlassung = async function() {
+  const name = document.getElementById('entlass-name').value.trim();
+  const von  = document.getElementById('entlass-von').value;
+  const bis  = document.getElementById('entlass-bis').value;
+  if (!name) return showNotif('Bitte einen Gruppennamen eingeben!','error');
+  if (!von)  return showNotif('Bitte das Von-Datum eingeben!','error');
+  if (!bis)  return showNotif('Bitte das Bis-Datum eingeben!','error');
+  if (von > bis) return showNotif('Das Von-Datum darf nicht nach dem Bis-Datum liegen!','error');
+
+  try {
+    // Alle aktuellen Archiv-Mitarbeiter als Gruppe speichern
+    const gruppe = {
+      name,
+      von,
+      bis,
+      erstelltAm: new Date().toISOString(),
+      erstelltVon: currentUser?.email||'',
+      mitarbeiter: archivData.map(ma => {
+        const {_id, ...rest} = ma;
+        return rest;
+      })
+    };
+    await addDoc(collection(db,'entlassungsarchiv'), gruppe);
+
+    // Alle Einträge aus dem Archiv löschen
+    for (const ma of archivData) {
+      await deleteDoc(doc(db,'archiv', ma._id));
+    }
+
+    await writeLog('mitarbeiter','archiv',
+      `${archivData.length} Mitarbeiter ins Entlassungsarchiv verschoben: "${name}" (${von} – ${bis})`,
+      name
+    );
+
+    closeModal('entlassungModal');
+    showNotif(`${gruppe.mitarbeiter.length} Mitarbeiter in "${name}" archiviert!`, 'success');
+    await loadArchiv();
+    await loadEntlassungsarchiv();
+    showPage(19);
+  } catch(e) { showNotif('Fehler: '+e.message,'error'); }
+}
+
+window.searchEntlassung = function() {
+  const q = document.getElementById('entlass-search').value.trim().toLowerCase();
+  if (!q) { renderEntlassungsarchiv(); return; }
+  renderEntlassungsarchiv(entlassungsData.filter(g =>
+    (g.name||'').toLowerCase().includes(q) ||
+    (g.von||'').includes(q) ||
+    (g.bis||'').includes(q)
+  ));
+}
+
+window.deleteEntlassungsgruppe = function() {
+  const q = document.getElementById('entlass-search').value.trim();
+  if (!q) return showNotif('Bitte Gruppenname ins Suchfeld eingeben','error');
+  const found = entlassungsData.find(g=>(g.name||'').toLowerCase()===q.toLowerCase());
+  if (!found) return showNotif('Gruppe nicht gefunden','error');
+  document.getElementById('del-title').textContent = 'Gruppe löschen?';
+  document.getElementById('del-msg').textContent = `Entlassungsgruppe "${found.name}" mit ${(found.mitarbeiter||[]).length} Mitarbeitern wirklich löschen?`;
+  document.getElementById('del-confirm-btn').textContent = 'Ja, Löschen';
+  deleteCallback = async () => {
+    await deleteDoc(doc(db,'entlassungsarchiv', found._id));
+    await writeLog('mitarbeiter','delete',`Entlassungsgruppe gelöscht: "${found.name}"`, found.name);
+    showNotif('Gruppe gelöscht','success');
+    await loadEntlassungsarchiv();
   };
   openModal('deleteConfirmModal');
 }
@@ -2957,13 +3167,13 @@ function applyRangPermissions(rang){
 
 function getAllowedPages(rn, isErsteller=false){
   if (rn===1) return [2,3,4,5,6];
-  if (rn===6) return [2,3,4,5,6,7,9];
+  if (rn===6) return [2,3,4,5,6,7,9,19];
   if (rn===7||rn===8) return [2,3,4,5,6,10,12];
-  if (rn===9) return [2,3,4,5,6,7,8,9,11];
-  if (rn===10) return [2,3,4,5,6,7,8,9,11];
-  if (rn===999) return [2,3,4,5,6,7,8,9,10,11,12]; // Admin
+  if (rn===9) return [2,3,4,5,6,7,8,9,11,19];
+  if (rn===10) return [2,3,4,5,6,7,8,9,11,19];
+  if (rn===999) return [2,3,4,5,6,7,8,9,10,11,12,19]; // Admin
   if (rn>=998) {
-    const base=[2,3,4,5,6,7,8,9,10,11,12];
+    const base=[2,3,4,5,6,7,8,9,10,11,12,19];
     if (isErsteller) base.push(20);
     return base;
   }
