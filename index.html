@@ -1060,6 +1060,8 @@
         <tr>
           <th style="width:160px;">Zeitpunkt</th>
           <th style="width:160px;">Benutzer</th>
+          <th style="width:70px;">ID</th>
+          <th style="width:120px;">Name</th>
           <th style="width:100px;">Kategorie</th>
           <th style="width:100px;">Aktion</th>
           <th>Details</th>
@@ -1219,7 +1221,7 @@ function renderLogs() {
   const pageLogs = filteredLogs.slice(start, start + LOG_PAGE_SIZE);
 
   if (pageLogs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6"><div class="log-empty"><div class="log-empty-icon">📋</div><div>Keine Einträge gefunden</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="log-empty"><div class="log-empty-icon">📋</div><div>Keine Einträge gefunden</div></div></td></tr>`;
     renderLogPagination();
     return;
   }
@@ -1249,9 +1251,24 @@ function renderLogs() {
     const al = actionLabel[log.action] || log.action?.toUpperCase() || '?';
     const cc = catClass[log.category] || '';
     const cl = catLabel[log.category] || log.category || '?';
+
+    // ID und Name aus Mitarbeiterregister holen via userUID → zugriff → mitarbeiter
+    let maId = '–';
+    let maName = '–';
+    if (log.userUID) {
+      const zug = zugriffData.find(z => z.uid === log.userUID);
+      if (zug && zug.id) {
+        maId = zug.id;
+        const ma = mitarbeiterData.find(m => m.id === zug.id);
+        if (ma && ma.name) maName = ma.name;
+      }
+    }
+
     return `<tr>
       <td style="font-size:11px;color:var(--text-dim);white-space:nowrap;">${ts}</td>
       <td style="font-size:11px;">${log.userEmail||log.userName||'–'}</td>
+      <td style="font-family:'Orbitron',monospace;font-size:10px;color:var(--cyan);text-align:center;">${maId}</td>
+      <td style="font-size:11px;font-weight:600;">${maName}</td>
       <td><span class="log-category-badge ${cc}">${cl}</span></td>
       <td><span class="log-action-badge ${ac}">${al}</span></td>
       <td style="text-align:left;max-width:300px;word-break:break-word;">${log.details||'–'}</td>
@@ -1427,13 +1444,16 @@ onAuthStateChanged(auth, async (user) => {
       try { await loadAllData(); } catch(e) { console.warn('[AUTH] loadAllData:', e.message); }
       loadSeenTimestamps();
 
+      // Prüfen ob User auf einer Sanktionsdetailseite war
+      let activeSank = null;
+      try { activeSank = localStorage.getItem('lspd_active_sank'); } catch(e) {}
+
       let savedPage = 2;
       try {
         const sp = parseInt(localStorage.getItem('lspd_page'));
         if (sp >= 2 && sp <= 12 || sp === 20) savedPage = sp;
       } catch(e) {}
 
-      // Rang prüfen — gespeicherte Seite nur laden wenn erlaubt
       const rangStr = zugData.rang || '1';
       const rn = rangNumFromStr(rangStr);
       const isErsteller = rangStr === 'Ersteller';
@@ -1443,6 +1463,15 @@ onAuthStateChanged(auth, async (user) => {
       showPage(savedPage);
       loadUserDashboard(zugData);
       applyRangPermissions(rangStr);
+
+      // Sanktionsdetailseite wiederherstellen
+      if (activeSank && allowed.includes(10)) {
+        setTimeout(() => {
+          const s = sanktionData.find(x => x.nr === activeSank);
+          if (s) showSanktionPage(activeSank);
+        }, 300);
+      }
+
       hideLoader();
     } else {
       await signOut(auth);
@@ -2370,19 +2399,21 @@ window.showSanktionPage=function(nr){
   if (!s) return;
   const navButtons=document.querySelector('.nav-buttons');
   if (navButtons) navButtons.style.display='none';
+  // Aktive Sanktion speichern für Reload-Wiederherstellung
+  try { localStorage.setItem('lspd_active_sank', s.nr); } catch(e) {}
   let dp=document.getElementById('sank-detail-'+s.nr);
   if (!dp) {
     dp=document.createElement('div');
     dp.id='sank-detail-'+s.nr;
     dp.className='page';
-    dp.style.cssText='position:fixed;inset:0;z-index:500;background:var(--bg-dark);overflow-y:auto;display:none;';
+    dp.style.cssText='position:fixed;inset:0;z-index:500;background:var(--bg-dark);display:none;flex-direction:column;';
     dp.innerHTML=`
-      <div style="display:flex;align-items:center;padding:8px 12px;background:var(--bg-panel);border-bottom:1px solid var(--border);">
+      <div style="display:flex;align-items:center;padding:8px 12px;background:var(--bg-panel);border-bottom:1px solid var(--border);flex-shrink:0;">
         <button class="tool-btn back" onclick="backFromSanktionDetail('${s.nr}')">← BACK</button>
         <div style="flex:1;text-align:center;font-size:13px;font-weight:700;color:var(--text-dim);letter-spacing:1px;">SK ${s.nr}</div>
         <button class="tool-btn" onclick="openEditSanktionModal('${s.nr}')">✏️</button>
       </div>
-      <div class="table-wrapper">
+      <div class="table-wrapper" style="flex-shrink:0;">
         <table class="data-table" style="width:100%;">
           <thead><tr><th>ID</th><th>Name</th><th>Sanktionsgrundbeweise</th><th>Sanktion abgearbeitet (nur Link)</th></tr></thead>
           <tbody><tr>
@@ -2393,10 +2424,10 @@ window.showSanktionPage=function(nr){
           </tr></tbody>
         </table>
       </div>
-      <div style="padding:16px 16px 0 16px;">
-        <div style="font-family:'Orbitron',monospace;font-size:12px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">💬 NACHRICHTEN</div>
-        <div id="sd-chat-${s.nr}" style="min-height:60px;max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:12px;"></div>
-        <div style="display:flex;gap:8px;align-items:center;padding-bottom:16px;">
+      <div style="flex:1;display:flex;flex-direction:column;padding:16px;overflow:hidden;min-height:0;">
+        <div style="font-family:'Orbitron',monospace;font-size:12px;color:var(--cyan);letter-spacing:2px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);flex-shrink:0;">💬 NACHRICHTEN</div>
+        <div id="sd-chat-${s.nr}" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;min-height:0;"></div>
+        <div style="display:flex;gap:8px;align-items:center;padding-top:12px;flex-shrink:0;border-top:1px solid var(--border);margin-top:8px;">
           <input id="sd-chat-input-${s.nr}" class="modal-input" placeholder="Nachricht eingeben..." style="flex:1;" onkeydown="if(event.key==='Enter')sendSanktionChat('${s.nr}','${s._id}')">
           <button class="tool-btn purple" onclick="sendSanktionChat('${s.nr}','${s._id}')" style="white-space:nowrap;">Senden</button>
         </div>
@@ -2404,10 +2435,9 @@ window.showSanktionPage=function(nr){
     document.getElementById('sanktionPages').appendChild(dp);
   }
   document.querySelectorAll('#sanktionPages .page').forEach(p=>{p.classList.remove('active');p.style.display='none';});
-  dp.style.display='block'; dp.classList.add('active');
-  // Als gesehen markieren → Blinken stoppen
+  dp.style.display='flex'; dp.classList.add('active');
+  // Als gesehen markieren → roten Rahmen entfernen
   markSanktionSeen(s.nr);
-  // Zeile in Tabelle sofort aktualisieren
   const rows = document.querySelectorAll('#sank-tbody tr');
   rows.forEach(row => {
     const cells = row.querySelectorAll('td');
@@ -2423,6 +2453,7 @@ window.showSanktionPage=function(nr){
 
 window.backFromSanktionDetail=function(nr){
   document.querySelectorAll('#sanktionPages .page').forEach(p=>{p.classList.remove('active');p.style.display='none';});
+  try { localStorage.removeItem('lspd_active_sank'); } catch(e) {}
   showPage(10);
 }
 
