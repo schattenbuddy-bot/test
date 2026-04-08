@@ -1751,11 +1751,39 @@ function getRankColor(rank) {
   return '#333333';
 }
 
+// ===== DIENSTNUMMER HILFSFUNKTIONEN =====
+function getNextFreeDN() {
+  // Nur aktive Mitarbeiter berücksichtigen (kein Archiv)
+  const vergeben = new Set(
+    mitarbeiterData.map(m => parseInt(m.dn)).filter(n => !isNaN(n) && n > 0)
+  );
+  // Nächste freie DN ab 31 bis 1000 finden
+  for (let n = 31; n <= 1000; n++) {
+    if (!vergeben.has(n)) return String(n);
+  }
+  return ''; // Alle vergeben
+}
+
+function getDuplicateDNs() {
+  // DNs die mehr als einmal vorkommen
+  const counts = {};
+  mitarbeiterData.forEach(m => {
+    const dn = (m.dn||'').trim();
+    if (!dn) return;
+    counts[dn] = (counts[dn]||0) + 1;
+  });
+  return new Set(Object.keys(counts).filter(dn => counts[dn] > 1));
+}
+
 function renderMitarbeiter(filtered=null) {
   const list = filtered||mitarbeiterData;
   const tbody = document.getElementById('ma-tbody');
   if (!tbody) return;
   const sorted = [...list].sort((a,b)=>(parseInt(b.rank)||0)-(parseInt(a.rank)||0));
+
+  // Doppelte DNs ermitteln (nur aus allen Mitarbeitern, nicht aus filtered)
+  const dupDNs = getDuplicateDNs();
+
   const rows = [];
   let lastRank = null;
   sorted.forEach(ma => {
@@ -1767,8 +1795,13 @@ function renderMitarbeiter(filtered=null) {
     const div = getDivisionLabel(ma.rank);
     const ausb = ma.ausbildungen||{};
     const chk = k => ausb[k]===true?'✅':'⬜';
+    const dn = ma.dn||'';
+    const isDupDN = dn && dupDNs.has(dn);
+    const dnCell = isDupDN
+      ? `<td style="background:rgba(234,88,12,0.25);color:#fb923c;font-weight:700;border:1px solid rgba(234,88,12,0.5);" title="⚠ Doppelte Dienstnummer!">${dn} ⚠</td>`
+      : `<td>${dn}</td>`;
     rows.push(`<tr>
-      <td>${ma.id||''}</td><td>${ma.dn||''}</td><td>${ma.name||''}</td><td>${ma.tel||''}</td>
+      <td>${ma.id||''}</td>${dnCell}<td>${ma.name||''}</td><td>${ma.tel||''}</td>
       <td>${rankName(ma.rank)||''}</td><td class="sep-col"></td>
       <td><span class="${div.cls}">${div.label}</span></td><td class="sep-col"></td>
       <td>${ma.urlaub||0}</td><td>${ma.strike||0}</td>
@@ -1790,6 +1823,11 @@ window.openAddMitarbeiterModal = function() {
   document.getElementById('addMaSubmitBtn').textContent='Hinzufügen';
   document.getElementById('ma-id').readOnly=false;
   openModal('addMaModal');
+  // DN automatisch vorausfüllen
+  setTimeout(()=>{
+    const dnField = document.getElementById('ma-dn');
+    if (dnField && !dnField.value) dnField.value = getNextFreeDN();
+  }, 30);
 }
 
 window.openEditMitarbeiterModal = async function() {
@@ -2054,8 +2092,9 @@ window.setFreigabe = async function(docId, val, quelle='zugriff') {
           const qs=await getDocs(q);
           if (qs.empty) {
             const today=new Date().toISOString().split('T')[0];
+            const autoDN = getNextFreeDN();
             await addDoc(collection(db,'mitarbeiter'),{
-              id:z.id,name:'',dn:'',tel:'',rank:'',
+              id:z.id,name:'',dn:autoDN,tel:'',rank:'',
               invite:today,rankup:today,abteilung:'',zabt:'',urlaub:0,strike:0,
               ausbildungen:{GA:false,EHK:false,ES:false,OP:false,OK:false,FULA:false,TST:false,KS:false,OKP:false,FT:false,JP:false,ZP:false,VHP:false,SP:false,TOW:false,AKS:false},
               linkedUid:z.uid||''
@@ -2083,8 +2122,9 @@ async function handleFreigabe(z) {
   const q=query(collection(db,'mitarbeiter'),where('id','==',z.id));
   const qs=await getDocs(q);
   if (qs.empty) {
+    const autoDN = getNextFreeDN();
     await addDoc(collection(db,'mitarbeiter'),{
-      id:z.id,name:'',dn:'',tel:'',rank:'',
+      id:z.id,name:'',dn:autoDN,tel:'',rank:'',
       invite:'',rankup:'',abteilung:'',zabt:'',urlaub:0,strike:0,
       ausbildungen:{GA:false,EHK:false,ES:false,OP:false,OK:false,FULA:false,TST:false,KS:false,OKP:false,FT:false,JP:false,ZP:false,VHP:false,SP:false,TOW:false,AKS:false},
       linkedUid:z.uid||''
